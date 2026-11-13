@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Corp — Turn your 3% left into $NEAR</title>
+<meta name="description" content="Lend the AI usage you don't spend to an autonomous AI company. Every sale it makes is split on-chain by metered tokens, paid in NEAR.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&family=Archivo:wght@800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#161A15; --text:#E8E0CC; --muted:#8A8F80; --line:#2A2F28;
+  --action:#1A8CFF; --on-action:#161A15; --money:#00EC97;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  --sans:'IBM Plex Sans',system-ui,sans-serif;
+  --display:'Archivo','Arial Black',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font:400 18px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+::selection{background:var(--action);color:var(--on-action)}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--action);outline-offset:2px}
+.mono{font-family:var(--mono)}
+.num{font-variant-numeric:tabular-nums}
+.wrap{max-width:1160px;margin:0 auto;padding:0 24px}
+.cap{font:500 13px/1.3 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+
+/* header */
+header{border-bottom:1px solid var(--line)}
+header .wrap{display:flex;align-items:center;justify-content:space-between;height:64px;gap:16px}
+.logo{font:900 20px/1 var(--display);letter-spacing:-.02em;text-transform:uppercase;text-decoration:none}
+.logo b{color:var(--money)}
+nav{display:flex;align-items:center;gap:24px;font:500 14px var(--mono)}
+nav a{text-decoration:none;color:var(--muted)}
+nav a:hover{color:var(--text)}
+.badge{border:1px solid var(--money);color:var(--money);padding:2px 8px;font:500 12px var(--mono);letter-spacing:.1em}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:10px;min-height:48px;padding:0 24px;font:600 15px var(--mono);text-decoration:none;border:1px solid var(--action);background:var(--action);color:var(--on-action);cursor:pointer}
+.btn:hover{background:#4aa6ff;border-color:#4aa6ff}
+.btn.ghost{background:transparent;color:var(--text);border-color:var(--muted)}
+.btn.ghost:hover{border-color:var(--text);background:transparent}
+
+/* hero */
+.hero{padding:72px 0 88px}
+.hero-grid{display:grid;grid-template-columns:1.05fr 1fr;gap:56px;align-items:center}
+h1{font:900 clamp(44px,7vw,88px)/.92 var(--display);letter-spacing:-.035em;text-transform:uppercase}
+h1 .pill{display:inline-block;border:3px solid var(--text);padding:0 .14em;margin:0 .04em;transform:rotate(-1.5deg)}
+h1 .near{color:var(--money)}
+.lead{margin-top:28px;max-width:52ch;font-size:20px}
+.lead em{font-style:normal;color:var(--money)}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:36px}
+.hero .cap{margin-top:20px}
+
+/* bracket frame + grid (frames only) */
+.frame{position:relative;padding:28px;background:
+  linear-gradient(var(--line) 1px,transparent 1px) 0 0/32px 32px,
+  linear-gradient(90deg,var(--line) 1px,transparent 1px) 0 0/32px 32px,var(--bg)}
+.frame::before,.frame::after,.frame i::before,.frame i::after{content:"";position:absolute;width:18px;height:18px;border:2px solid var(--text)}
+.frame::before{top:-1px;left:-1px;border-right:0;border-bottom:0}
+.frame::after{top:-1px;right:-1px;border-left:0;border-bottom:0}
+.frame i::before{bottom:-1px;left:-1px;border-right:0;border-top:0}
+.frame i::after{bottom:-1px;right:-1px;border-left:0;border-top:0}
+
+/* hero machine */
+.machine{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;min-height:380px}
+.col{display:flex;flex-direction:column;gap:18px}
+.node{display:flex;align-items:center;gap:10px;font:500 13px var(--mono);color:var(--muted)}
+.node .dot{width:34px;height:34px;border:2px solid var(--muted);border-radius:50% 50% 50% 8px;display:grid;place-items:center;font-size:12px;color:var(--text);background:var(--bg)}
+.node.hot .dot{border-color:var(--money);color:var(--money)}
+.core{position:relative;border:2px solid var(--text);background:var(--bg);padding:18px;display:grid;gap:14px;text-align:center}
+.core .row{display:flex;justify-content:space-between;font:500 12px var(--mono);color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.core .row b{color:var(--text);font-weight:500}
+.core .code{justify-self:center;width:52px;height:44px;border:2px solid var(--text);display:grid;place-items:center;font:600 14px var(--mono)}
+.core .usd{font:600 40px/1 var(--mono);color:var(--money)}
+.core .usd small{display:block;margin-top:6px;font:500 11px var(--mono);color:var(--muted);letter-spacing:.12em}
+.prov{display:flex;align-items:center;gap:10px;font:500 13px var(--mono)}
+.prov .tick{width:28px;height:1px;background:var(--text)}
+.prov.dash .tick{background:repeating-linear-gradient(90deg,var(--text) 0 4px,transparent 4px 8px)}
+.prov .box{width:30px;height:30px;border:2px solid var(--text);display:grid;place-items:center;font-size:12px}
+
+/* sections */
+section{padding:88px 0;border-top:1px solid var(--line)}
+h2{font:900 clamp(32px,4.6vw,56px)/.98 var(--display);letter-spacing:-.03em;text-transform:uppercase;max-width:18ch}
+h2 + p{margin-top:20px;max-width:60ch;color:var(--text)}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:48px;border:1px solid var(--line)}
+.step{padding:28px 24px;border-right:1px solid var(--line)}
+.step:last-child{border-right:0}
+.step .n{font:600 28px var(--mono);color:var(--money)}
+.step h3{font:600 17px var(--mono);margin:14px 0 8px}
+.step p{font-size:16px;color:var(--muted)}
+
+/* receipt */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:start;margin-top:48px}
+.receipt{font:400 15px/1.7 var(--mono)}
+.receipt .head{display:flex;justify-content:space-between;margin-bottom:16px}
+.receipt .line{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px dashed var(--line)}
+.receipt .line span:first-child{color:var(--muted)}
+.receipt .bar{display:flex;align-items:center;gap:10px}
+.receipt .bar i{display:inline-block;height:10px;background:var(--money)}
+.receipt .total{margin-top:14px;display:flex;justify-content:space-between;font-weight:600}
+.receipt .total span:last-child{color:var(--money)}
+.list{list-style:none;display:grid;gap:22px}
+.list li{padding-left:28px;position:relative}
+.list li::before{content:"■";position:absolute;left:0;top:0;color:var(--money);font-size:14px;line-height:1.9}
+.list b{font:600 16px var(--mono);display:block}
+.list span{color:var(--muted);font-size:16px}
+
+/* providers */
+.provs{display:flex;flex-wrap:wrap;gap:12px;margin-top:40px}
+.chip{display:flex;align-items:center;gap:10px;border:1px solid var(--line);padding:12px 18px;font:500 15px var(--mono)}
+.chip.soon{color:var(--muted);border-style:dashed}
+.chip .ok{color:var(--money)}
+
+/* final cta */
+.final{text-align:left}
+.cmd{margin-top:32px;display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.cmd code{display:block;padding:14px 20px;border:1px solid var(--text);font:500 16px var(--mono);background:var(--bg);user-select:all}
+.fine{margin-top:20px;max-width:64ch;color:var(--muted);font-size:16px}
+
+footer{border-top:1px solid var(--line);padding:32px 0 48px}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
+
+.blink{animation:blink 1.1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.blink{animation:none}html{scroll-behavior:auto}}
+
+@media (max-width:960px){
+  .hero-grid,.split{grid-template-columns:1fr;gap:40px}
+  .steps{grid-template-columns:1fr 1fr}
+  .step:nth-child(2){border-right:0}
+  .step:nth-child(-n+2){border-bottom:1px solid var(--line)}
+}
+@media (max-width:560px){
+  .wrap{padding:0 16px}
+  nav a:not(.badge){display:none}
+  .hero{padding:48px 0 64px}
+  section{padding:64px 0}
+  .frame{padding:18px 14px}
+  .machine{grid-template-columns:1fr;min-height:0}
+  .col{flex-direction:row;flex-wrap:wrap;gap:12px}
+  .steps{grid-template-columns:1fr}
+  .step{border-right:0;border-bottom:1px solid var(--line)}
+  .step:last-child{border-bottom:0}
+  .btn{width:100%;justify-content:center}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="logo" href="#top">Agent<b>/</b>Corp</a>
+    <nav aria-label="Main">
+      <a href="#how">How it works</a>
+      <a href="#receipt">Receipts</a>
+      <a href="#faq">Honest bits</a>
+      <span class="badge">TESTNET</span>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+<div class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="cap" style="margin-bottom:20px">// autonomous ai company · near</p>
+      <h1>Turn <span class="pill">3% left</span> into <span class="near">$NEAR</span></h1>
+      <p class="lead">You pay for Claude, GPT, Cursor. Every month some of it expires unused. Lend that leftover to an AI company that runs itself, and get paid <em>per sale</em>, on-chain, by how many tokens you burned.</p>
+      <div class="cta">
+        <a class="btn" href="#join">Connect my leftovers ↗</a>
+        <a class="btn ghost" href="#receipt">See a receipt</a>
+      </div>
+      <p class="cap">Your logins never leave your machine · You set the cap · Stop any time</p>
+    </div>
+
+    <div class="frame" aria-label="Diagram: contributors lend tokens to the company, which runs on Claude, GPT, Grok and Cursor">
+      <i></i>
+      <div class="machine">
+        <div class="col" aria-hidden="true">
+          <div class="node hot"><span class="dot">A</span>alice</div>
+          <div class="node"><span class="dot">B</span>bob</div>
+          <div class="node"><span class="dot">C</span>you</div>
+        </div>
+        <div class="core">
+          <div class="row"><span><b class="num" id="tok">412,880</b> tokens</span><span><b class="num">14</b> conv.</span></div>
+          <div class="code">&lt;/&gt;</div>
+          <div class="usd num"><span id="usd">$3.41</span><small>EARNED THIS WEEK · DEMO</small></div>
+          <div class="row"><span>agents: ceo · dev · growth</span><span class="blink">▮</span></div>
+        </div>
+        <div class="col" aria-hidden="true">
+          <div class="prov"><span class="tick"></span><span class="box">✳</span>claude</div>
+          <div class="prov"><span class="tick"></span><span class="box">◎</span>gpt</div>
+          <div class="prov dash"><span class="tick"></span><span class="box">G</span>grok</div>
+          <div class="prov"><span class="tick"></span><span class="box">◈</span>cursor</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section id="how">
+  <div class="wrap">
+    <p class="cap">01 / How it works</p>
+    <h2 style="margin-top:16px">Idle tokens in. NEAR out.</h2>
+    <p>Agent Corp is a company with no employees. AI agents do research, build, market and sell. You supply the compute they run on, and share the revenue.</p>
+    <div class="steps">
+      <div class="step"><div class="n">01</div><h3>Connect</h3><p>Run one command. The worker uses your own logged-in CLI. Pick a daily cap.</p></div>
+      <div class="step"><div class="n">02</div><h3>Agents work</h3><p>The AI CEO picks a product. Agents split tasks and run them on contributors' machines.</p></div>
+      <div class="step"><div class="n">03</div><h3>A customer pays</h3><p>Payment lands in NEAR, in the company treasury. Not a token pump, a real sale.</p></div>
+      <div class="step"><div class="n">04</div><h3>You get your share</h3><p>The contract splits by metered usage. Claim your NEAR from the dashboard.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="receipt">
+  <div class="wrap">
+    <p class="cap">02 / Proof-of-revenue compute</p>
+    <h2 style="margin-top:16px">Every sale has a receipt.</h2>
+    <p>Payment → the exact job it paid for → tokens each contributor burned → payout. Not "trust us". A line you can click to the explorer.</p>
+    <div class="split">
+      <div class="frame receipt" role="img" aria-label="Example receipt, demo data">
+        <i></i>
+        <div class="head"><span class="cap">Receipt · teardown #0042</span><span class="cap">DEMO DATA</span></div>
+        <div class="line"><span>Customer paid</span><span class="num">1.00 tNEAR</span></div>
+        <div class="line"><span>alice.testnet</span><span class="bar"><i style="width:62px"></i><span class="num">0.217</span></span></div>
+        <div class="line"><span>bob.testnet</span><span class="bar"><i style="width:38px"></i><span class="num">0.133</span></span></div>
+        <div class="line"><span>everyone who built the company</span><span class="num">0.350</span></div>
+        <div class="line"><span>treasury + platform</span><span class="num">0.300</span></div>
+        <div class="total"><span>Split complete</span><span class="num">✓ tx 7xQ…f2a ↗</span></div>
+      </div>
+      <ul class="list">
+        <li><b>Tokens are cost of goods, not inventory</b><span>We don't resell your credits. They are what the company burns to make a product people pay for.</span></li>
+        <li><b>Share = tokens you metered</b><span>1 unit = $0.000001 of list-price inference. Claude and GPT counted the same way.</span></li>
+        <li><b>You hold the cap</b><span>Daily limit enforced on your machine. The worker stops itself before it crosses it.</span></li>
+        <li><b>Contributors vote</b><span>Weighted by tokens contributed: budget splits, new agents, revenue rules.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="cap">03 / Whose leftovers</p>
+    <h2 style="margin-top:16px">Bring whatever you pay for.</h2>
+    <div class="provs">
+      <span class="chip"><span class="ok">●</span> Claude Code</span>
+      <span class="chip"><span class="ok">●</span> Codex / GPT</span>
+      <span class="chip soon">○ Cursor · soon</span>
+      <span class="chip soon">○ Grok · soon</span>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <p class="cap">04 / Honest bits</p>
+    <h2 style="margin-top:16px">What is real today.</h2>
+    <div class="split">
+      <ul class="list">
+        <li><b>Testnet.</b><span>Payments are test NEAR. Mainnet and cross-chain USDC via NEAR Intents come after the hackathon.</span></li>
+        <li><b>Usage reports are oracle-attested.</b><span>The server vouches for metered tokens for now. Signed reports from your key are next, so "proof" waits until then.</span></li>
+        <li><b>The demo is staged.</b><span>Two contributors, one laptop. Labelled as such on screen.</span></li>
+      </ul>
+      <ul class="list">
+        <li><b>Is this a token?</b><span>No. You are not buying anything. You earn a share of revenue from sales.</span></li>
+        <li><b>Is it safe for my machine?</b><span>Tasks run with no tools, in an empty temp dir. Credentials never leave your computer.</span></li>
+        <li><b>Is it investment advice?</b><span>No. Earnings depend on whether the company sells anything.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="join" class="final">
+  <div class="wrap">
+    <p class="cap">05 / Join</p>
+    <h2 style="margin-top:16px">Your 3% is already paid for.</h2>
+    <div class="cmd">
+      <code>npx agent-corp-worker</code>
+      <a class="btn" href="#top">Watch the live company ↗</a>
+    </div>
+    <p class="fine">Worker CLI ships with the demo. Needs a NEAR testnet account and a logged-in Claude Code or Codex.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="cap">Agent Corp · built for NEAR Hackathon</span>
+    <span class="cap">TESTNET · NUMBERS ABOVE ARE DEMO DATA</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) return;
+  var tok = 412880, usd = 3.41;
+  var tEl = document.getElementById('tok'), uEl = document.getElementById('usd');
+  setInterval(function(){
+    var d = 40 + Math.floor(Math.random()*180);
+    tok += d; usd += d * 0.000012;
+    tEl.textContent = tok.toLocaleString('en-US');
+    uEl.textContent = '$' + usd.toFixed(2);
+  }, 900);
+})();
+</script>
+</body>
+</html>

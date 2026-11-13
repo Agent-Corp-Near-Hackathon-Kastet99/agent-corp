@@ -1,0 +1,14 @@
+{
+  "name": "agent-corp",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.11.0",
+  "scripts": { "test": "pnpm -r test" },
+  "devDependencies": {
+    "@agentcorp/worker": "workspace:*",
+    "@types/node": "^24.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.0"
+  }
+}

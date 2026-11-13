@@ -1,0 +1,5 @@
+export type Subtask = "copy" | "design";
+export type JobState = "created" | "paid" | "running" | "complete" | "settled" | "refundable" | "refunded";
+export type Receipt = { txHash:string; explorerUrl:string; amountYocto:string; contributorPoolYocto:string; treasuryYocto:string; platformYocto:string; shares:{account:string;yocto:string;servedThisJob:boolean}[] };
+export type JobView = { id:string; url:string; state:JobState; subtasks:{subtask:Subtask;status:"queued"|"running"|"reassigned"|"done"|"failed";elapsedMs:number}[]; teardown?:{copy:string;design:string}; refundOpensAt?:number; receipt?:Receipt };
+export type DashboardView = { treasuryYocto:string;lastSaleDeltaYocto?:string;network:"testnet";contributors:{account:string;lifetimeUnits:string;sharePct:number;claimableYocto:string;points:number;todayUnits?:string;capUnits?:string}[];proposal?:{id:number;title:string;options:{label:string;pct:number}[];tally:{option:number;weight:string}[];status:"open"|"finalized";voted:number;eligible:number};activity:{ts:number;actor:"CEO"|"WORKER"|"CONTRACT"|"BIZDEV"|"MARKETING";text:string;recorded:boolean;txHash?:string}[] };
