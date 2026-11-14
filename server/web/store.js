@@ -1,3 +1,20 @@
-import {header,view,api,tnear} from './chain.js';document.querySelector('#header').innerHTML=header('store');const status=document.querySelector('#status'),buy=document.querySelector('#buy');try{let [c,dep]=await Promise.all([view('get_config'),api('/api/deployment')]);document.querySelector('#price').textContent=tnear(c.constraints.pass_price);const owned=await view('has_pass',{account_id:dep.demoWallets.customer});status.textContent=owned?'Demo wallet already has a pass. You can play now.':dep.demoActions?'Ready to purchase with demo wallet.':'Demo checkout unavailable.';buy.disabled=owned||!dep.demoActions;if(owned)buy.textContent='Pass active'}catch(e){status.textContent=e.message}buy.onclick=async()=>{buy.disabled=true;status.textContent='Waiting for testnet transaction…';try{const r=await api('/api/demo/buy',{});await api('/api/demo/session',{});sessionStorage.setItem('heistReceipt',r.explorerUrl);status.textContent='Pass active. Opening game…';location.href='/game'}catch(e){status.textContent=`Purchase failed: ${e.message}. Pass remains locked unless previously purchased.`;buy.disabled=false}};
-
+import {header,view,api,tnear,deployment} from './chain.js';
+document.querySelector('#header').innerHTML=header('store');
+const status=document.querySelector('#status'),buy=document.querySelector('#buy'),connect=document.querySelector('#connect'),disconnect=document.querySelector('#disconnect'),walletStatus=document.querySelector('#wallet-status'),demo=document.querySelector('#demo');
+let player,dep;
+async function refresh(){
+  dep=await deployment();
+  const c=await view('get_config');document.querySelector('#price').textContent=tnear(c.constraints.pass_price);
+  try{player=await api('/api/player/me')}catch(e){if(e.status!==401)throw e;player=undefined}
+  walletStatus.textContent=player?`Connected: ${player.account}`:'Use your NEAR testnet wallet. No real money.';
+  connect.hidden=!!player;disconnect.hidden=!player;
+  buy.disabled=!player||player.hasPass||c.paused;buy.textContent=player?.hasPass?'Your pass is active':'Buy with my wallet';
+  status.textContent=player?.hasPass?'Your pass is active. Play with your own score.':player?'Ready. Review the amount in your wallet before signing.':'Connect and sign a login message to buy a pass.';
+  demo.hidden=!dep.demoActions;
+}
+connect.onclick=async()=>{connect.disabled=true;status.textContent='Open MyNearWallet and approve the login message…';try{const {connectPlayer}=await import('./wallet.js');await connectPlayer();await refresh()}catch(e){status.textContent=e.message}finally{connect.disabled=false}};
+disconnect.onclick=async()=>{try{const {disconnectPlayer}=await import('./wallet.js');await disconnectPlayer();await refresh()}catch(e){status.textContent=e.message}};
+buy.onclick=async()=>{buy.disabled=true;status.textContent='Review and sign the testnet purchase in your wallet…';try{const {buyPlayerPass}=await import('./wallet.js');const tx=await buyPlayerPass();if(tx)sessionStorage.setItem('heistReceipt',`${dep.explorer}/txns/${tx}`);location.href='/game'}catch(e){status.textContent=e.message;buy.disabled=false}};
+demo.onclick=async()=>{demo.disabled=true;try{await api('/api/player/logout',{});await api('/api/demo/session',{});location.href='/game'}catch(e){status.textContent=e.message;demo.disabled=false}};
+try{await refresh()}catch(e){status.textContent=e.message}
 document.querySelector('#quote').onclick=async()=>{const out=document.querySelector('#quote-result');out.textContent='Requesting mainnet preview…';try{const q=await api('/api/intents/quote?asset=usdc-near');out.textContent=q.available?`${(Number(q.inputAmount)/1e6).toFixed(6)} USDC for 1 wNEAR · preview only`:q.reason}catch(e){out.textContent=e.message}};

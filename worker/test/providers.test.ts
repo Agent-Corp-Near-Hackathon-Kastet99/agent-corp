@@ -35,3 +35,19 @@ it("custom ACP config rejects unpinned executables and environment injection", (
   expect(parseCustomAcpAgents([entry], new Set()).agents).toHaveLength(1);
   for (const patch of [{ sha256: "" }, { env: { NODE_OPTIONS: "--require=evil" } }, { command: "agent" }, { credentialFiles: ["/etc/passwd"] }]) expect(parseCustomAcpAgents([{ ...entry, ...patch }], new Set()).agents).toEqual([]);
 });
+
+import { piArgv, piInstall } from '../src/providers/pi.js';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+it('Pi launch disables tools, MCP, extensions and all context discovery', () => {
+  const args=piArgv('openai-codex/gpt-test','Reply OK');
+  for(const flag of ['--no-tools','--no-mcp','--no-extensions','--no-skills','--no-prompt-templates','--no-themes','--no-context-files','--no-session']) expect(args).toContain(flag);
+  expect(args.slice(-2)).toEqual(['--','Reply OK']);
+  expect(parsePi({type:'agent_end',messages:[{role:'assistant',content:[{type:'text',text:'OK'}],usage:{input:10,output:2,cacheRead:3,cacheWrite:1}}]})).toMatchObject({total:{input:10,output:2,cacheRead:3,cacheWrite:1},final:true,text:'OK'});
+});
+it('Pi only gives a Node interpreter grant to an official npm entrypoint', async () => {
+  const root=await mkdtemp(join(tmpdir(),'pi-install-'));
+  try { await mkdir(join(root,'dist'));const cli=join(root,'dist','cli.js');await writeFile(cli,'#!/usr/bin/env node\n');await writeFile(join(root,'package.json'),JSON.stringify({name:'untrusted'}));await expect(piInstall(cli)).rejects.toThrow('Unsupported');await writeFile(join(root,'package.json'),JSON.stringify({name:'@earendil-works/pi-coding-agent'}));expect((await piInstall(cli)).prefix).toEqual([cli]); }
+  finally { await rm(root,{recursive:true,force:true}); }
+});

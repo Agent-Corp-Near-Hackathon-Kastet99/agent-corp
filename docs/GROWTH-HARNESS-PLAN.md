@@ -1,6 +1,6 @@
 # Growth Harness — Tool Map and Implementation Plan
 
-Date: 2026-11-14. Status: harness implemented; the sections below preserve the original design plan. Current runtime is in `server/src/growth/`, with owner configuration in `growth/` and Mission Control via `pnpm growth`. Tool adapters, approval gates, durable actions, Board-derived budgets, storage locks and graceful shutdown are implemented and fixture-tested. Real-service end-to-end verification and live growth Board writes remain unverified. Growth spending is not yet recorded as paid on-chain expenses. kickbacks.ai was not integrated (see §9). Companion to [AGENT-CORP.md](AGENT-CORP.md) and the earlier [Game operations stack](../reports/Game%20operations%20stack.md) report.
+Date: 2026-11-14. Status: harness implemented; the sections below preserve the original design plan. Current runtime is in `server/src/growth/`, with owner configuration in `growth/` and Mission Control via `pnpm growth`. Tool adapters, approval gates, durable actions, Board-derived budgets, storage locks and graceful shutdown are implemented and fixture-tested. Real-service end-to-end verification and live growth Board writes remain unverified. Actual growth payments can be recorded as testnet on-chain expenses through the owner-confirmed bridge in `server/src/growth/expenses.ts` (off by default); estimates are never booked as paid. kickbacks.ai was not integrated (see §9). Companion to [AGENT-CORP.md](AGENT-CORP.md) and the earlier [Game operations stack](../reports/Game%20operations%20stack.md) report.
 
 ## 0. TL;DR
 

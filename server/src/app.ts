@@ -20,6 +20,8 @@ import type { Ledger, ChainConfig } from "./ledger.js";
 import { Store } from "./store.js";
 import { HOUSE_01 } from "./levels.js";
 import type { GrowthRuntime } from "./growth/runtime.js";
+import { PlayerAuth } from "./player-auth.js";
+import type { AccessKeyRpc } from "./auth.js";
 
 const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png" };
 
@@ -32,6 +34,7 @@ export type ApplicationOptions = {
   webRoot?: string;
   gameOnly?: boolean;
   gameOrigin?: string;
+  playerRpc?: AccessKeyRpc;
   /** Growth harness: Mission Control page + /api/growth/*. Absent = routes do not exist. */
   growth?: GrowthRuntime;
 };
@@ -40,6 +43,9 @@ export type ApplicationOptions = {
 export function createApplication(options: ApplicationOptions) {
 const { ledger, store } = options;
 const games = new GameSessions(store);
+const players = ledger ? new PlayerAuth(ledger.contractId, options.playerRpc) : undefined;
+const cookie = (req: IncomingMessage, name: string) => req.headers.cookie?.split(/;\s*/).find(c => c.startsWith(`${name}=`))?.slice(name.length + 1) ?? "";
+const setCookie = (name: string, value: string, seconds = 43200) => `${name}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${seconds}${options.gameOnly ? "; Secure" : ""}`;
 const agents = options.agents ?? (ledger ? new CompanyAgents(ledger, store.log) : undefined);
 const WEB = options.webRoot ?? join(ROOT, "server", "web");
 
@@ -61,7 +67,48 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
   const path = url.pathname;
   const method = req.method ?? "GET";
 
-  if (options.gameOnly && !["/api/deployment", "/api/game/levels/house-01", "/api/game/step", "/api/demo/session", "/api/demo/buy", "/api/intents/quote"].includes(path)) return json(res, 404, { error: "not found" });
+  const playerPaths = ["/api/player/challenge", "/api/player/verify", "/api/player/logout", "/api/player/me", "/api/player/session", "/api/player/checkout"];
+  if (options.gameOnly && !["/api/deployment", "/api/game/levels/house-01", "/api/game/step", "/api/demo/session", "/api/demo/buy", "/api/intents/quote", ...playerPaths].includes(path)) return json(res, 404, { error: "not found" });
+
+  if (playerPaths.includes(path)) {
+    const origin = options.gameOrigin ?? `http://${req.headers.host}`;
+    if (method === "POST" && (req.headers.origin !== origin || !req.headers["content-type"]?.startsWith("application/json"))) return json(res, 403, { error: "Same-origin JSON required" });
+    const auth = players;
+    if (!auth) return json(res, 503, { error: "Wallet login unavailable" });
+    if (path === "/api/player/challenge" && method === "POST") {
+      const b = await body(req); const issued = auth.issue(String(b.account ?? ""), origin);
+      res.setHeader("set-cookie", setCookie("heist-login", issued.browser, 300));
+      return json(res, 200, issued.challenge);
+    }
+    if (path === "/api/player/verify" && method === "POST") {
+      const session = await auth.verify(await body(req), cookie(req, "heist-login"), origin);
+      games.remove(cookie(req, "heist"));
+      res.setHeader("set-cookie", [setCookie("heist-player", session.token), setCookie("heist-login", "", 0), setCookie("heist", "", 0)]);
+      return json(res, 200, { account: session.account });
+    }
+    if (path === "/api/player/logout" && method === "POST") {
+      auth.logout(cookie(req, "heist-player")); games.remove(cookie(req, "heist"));
+      res.setHeader("set-cookie", [setCookie("heist-player", "", 0), setCookie("heist", "", 0)]);
+      return json(res, 200, { ok: true });
+    }
+    const player = auth.account(cookie(req, "heist-player"));
+    if (!player) return json(res, 401, { error: "Connect and verify your testnet wallet" });
+    if (path === "/api/player/me" && method === "GET") return json(res, 200, { account: player, hasPass: await need().view<boolean>("has_pass", { account_id: player }) });
+    if (path === "/api/player/session" && method === "POST") {
+      if (!await need().view<boolean>("has_pass", { account_id: player })) return json(res, 402, { error: "Buy a pass with your wallet first" });
+      games.remove(cookie(req, "heist"));
+      res.setHeader("set-cookie", setCookie("heist", games.create(player)));
+      return json(res, 200, { account: player });
+    }
+    if (path === "/api/player/checkout" && method === "POST") {
+      if (await need().view<boolean>("has_pass", { account_id: player })) return json(res, 409, { error: "Your pass is already active" });
+      const c = await need().view<ChainConfig>("get_config");
+      if (c.paused) return json(res, 409, { error: "Pass sales are paused" });
+      return json(res, 200, { signerId: player, receiverId: need().contractId,
+        actions: [{ type: "FunctionCall", params: { methodName: "buy_pass", args: {}, gas: "30000000000000", deposit: c.constraints.pass_price } }] });
+    }
+    return json(res, 405, { error: "method not allowed" });
+  }
 
   if (method === "GET" && path === "/api/deployment") {
     return json(res, 200, ledger

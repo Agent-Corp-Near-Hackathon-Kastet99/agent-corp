@@ -250,7 +250,7 @@ All values/payments carry `TESTNET` / `DEMO` labels. If live wallet payment or g
 
 ## 10. Implementation status and migration
 
-The testnet MVP has replaced the earlier **job-settlement payout** prototype. Canonical period accounting, storefront, House 01, dashboard, authenticated workers, provider adapters and Growth Mission Control are implemented. Current scope is a testnet demo, not production payments or individual player-wallet checkout.
+The testnet MVP has replaced the earlier **job-settlement payout** prototype. Canonical period accounting, storefront, House 01, dashboard, authenticated workers, provider adapters and Growth Mission Control are implemented. Current scope is a testnet demo, not production payments. Personal-wallet login and checkout (testnet, MyNearWallet) are implemented in the repository but not deployed or verified with a live wallet.
 
 Do not claim old testnet contract's 70/20/10 split, per-job accumulator, `settle` receipt, job-triggered withdrawal as support for this model. The canonical replacement is already deployed as `contract.agentcorp-c103c2bb.testnet`; receipts are in `docs/handoffs/LIVE-VERIFICATION.md`.
 

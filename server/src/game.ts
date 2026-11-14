@@ -8,6 +8,7 @@ type Session = { account: string; state: ReturnType<typeof initial>; started: nu
 /** Server-owned demo sessions and authoritative game transitions. Sessions expire after 12 hours. */
 export class GameSessions {
   private sessions = new Map<string, Session>();
+  remove(token: string) { this.sessions.delete(token); }
   constructor(private store: Store, private now = () => Date.now()) {}
   create(account: string) {
     const now = this.now();

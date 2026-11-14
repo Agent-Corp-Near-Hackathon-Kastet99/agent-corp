@@ -25,6 +25,7 @@ target/
 artifacts/
 .vercel/
 worker/.smoke/
+server/web/wallet.js
 bin/
 !worker/bin/
 !worker/bin/agent-corp-worker

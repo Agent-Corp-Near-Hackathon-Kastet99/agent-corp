@@ -36,13 +36,17 @@ export function nep413Payload(login: Pick<Login, "account" | "nonce">): Buffer {
   return loginPayload(login);
 }
 function defaultVerify(login: Login): boolean {
+  return verifySignedPayload(login.publicKey, login.signature, nep413Payload(login));
+}
+
+export function verifySignedPayload(publicKey: string, signature: string, payload: Uint8Array): boolean {
   try {
-    if (!login.publicKey.startsWith("ed25519:")) return false;
-    const raw = base58(login.publicKey.slice(8));
+    if (!publicKey.startsWith("ed25519:")) return false;
+    const raw = base58(publicKey.slice(8));
     if (raw.length !== 32) return false;
     // RFC 8410 Ed25519 SubjectPublicKeyInfo prefix + NEAR's raw public key.
     const spki = Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), raw]);
-    return verify(null, nep413Payload(login), { key: spki, format: "der", type: "spki" }, Buffer.from(login.signature, "base64"));
+    return verify(null, payload, { key: spki, format: "der", type: "spki" }, Buffer.from(signature, "base64"));
   } catch { return false; }
 }
 function base58(value: string): Buffer {

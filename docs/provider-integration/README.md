@@ -27,7 +27,7 @@ Rates are illustrative USD per million tokens; check them before use. The worker
 | Codex | `exec --json`, disabled tools, private CODEX_HOME with only auth.json linked | Standalone native CLI >= 0.169.0; token metering; reference signed-in run exercised in original integration thread |
 | OpenCode | Pure JSON run, all permissions denied, private XDG directories, auth.json linked | Experimental; `--allow-unverified` required |
 | Cursor | Bundled Node launcher, ask mode, private home, keychain access | Experimental; `--allow-unverified` required; cache overlap semantics unverified |
-| Pi | Discovery and usage parser | Execution disabled until launch, auth and confinement are verified |
+| Pi | Discovery, usage parser and opt-in one-shot launch with tool/extension/context flags disabled | Experimental; live sign-in and usage not verified |
 | Custom ACP | Hash-pinned native executable, private home, explicitly listed credential files | Experimental; all permission requests refused, no client FS/terminal/MCP; requires final token-usage extension |
 
 `ready` means local installation/credential checks passed; it does not prove credentials remain valid at the provider. No live subscription inference is performed by discovery or automated tests.

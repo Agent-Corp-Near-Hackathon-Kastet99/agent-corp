@@ -324,7 +324,7 @@ describe("live mode with mocked network", () => {
   it("refuses live runs with the placeholder product URL and live mode without an LLM key", async () => {
     const dir = mkdtempSync(join(tmpdir(), "growth-e-"));
     expect(() => createGrowthRuntime({ log: () => undefined, dir, stateFile: join(dir, "a.json"), env: {}, dryRun: false })).toThrow("ANTHROPIC_API_KEY");
-    const rt = createGrowthRuntime({ log: () => undefined, dir, stateFile: join(dir, "b.json"), env: {}, dryRun: false, llm: new Scripted({}) }); // real brief.yaml: placeholder URL
+    const rt = createGrowthRuntime({ log: () => undefined, dir, stateFile: join(dir, "b.json"), env: {}, dryRun: false, llm: new Scripted({}), loadBrief: () => { const b=loadBrief(); return {...b,product:{...b.product,url:"https://REPLACE-ME.vercel.app"}}; } });
     await expect(rt.loop.runCycle()).rejects.toThrow("product.url");
   });
 

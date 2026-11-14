@@ -7,15 +7,18 @@
     "setup:testnet": "pnpm --filter @agentcorp/server run setup",
     "constraints": "pnpm --filter @agentcorp/server run constraints",
     "demo": "pnpm --filter @agentcorp/server run demo",
-    "start": "pnpm --filter @agentcorp/server run start",
+    "build:web": "node server/scripts/build-web.mjs",
+    "start": "pnpm build:web && pnpm --filter @agentcorp/server run start",
     "test": "pnpm -r test",
     "test:contract": "cd contract && cargo test --lib",
     "typecheck": "pnpm -r typecheck",
-    "growth": "pnpm --filter @agentcorp/server run growth"
+    "growth": "pnpm --filter @agentcorp/server run growth",
+    "growth:doctor": "pnpm --filter @agentcorp/server exec tsx scripts/growth-doctor.ts"
   },
   "devDependencies": {
     "@agentcorp/worker": "workspace:*",
     "@types/node": "^24.10.0",
+    "esbuild": "0.25.12",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^3.0.0"

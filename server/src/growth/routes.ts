@@ -90,6 +90,7 @@ export async function handleGrowthRequest(rt: GrowthRuntime, req: IncomingMessag
           tools: Object.keys(tools), productUrl: brief.product.url },
         budget: { spentUsd: state.spentUsd(), totalCapUsd: policy.total_budget_usd, cycleCapUsd: policy.cycle_budget_usd, effectiveCycleCapUsd: boardSnap.effectiveCycleCapUsd },
         board: boardSnap,
+        expenses: { enabled: rt.expenses.available(), rows: rt.expenses.list() },
         cycles: cycles.list().slice(-5),
         actions: all.slice(-120).reverse(),
         pending: state.pending(),
@@ -115,6 +116,13 @@ export async function handleGrowthRequest(rt: GrowthRuntime, req: IncomingMessag
 
     if (method !== "POST") { send(res, 405, { error: "method not allowed" }); return true; }
     const b = await readBody(req);
+
+    const expense = /^\/api\/growth\/expenses\/([0-9a-f-]{36})$/.exec(path);
+    if (expense) {
+      const input = b.reconcile === true ? undefined : { actualUsd: str(b.actualUsd, "actualUsd", 30), evidenceUrl: str(b.evidenceUrl, "evidenceUrl", 1000), approvedBy: str(b.by, "by", 80) };
+      send(res, 200, await rt.expenses.record(expense[1]!, input));
+      return true;
+    }
 
     if (path === "/api/growth/run") {
       if (rt.loop.busy) { send(res, 409, { error: "a cycle is already running" }); return true; }

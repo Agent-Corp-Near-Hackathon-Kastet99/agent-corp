@@ -21,12 +21,14 @@ import type { Brief } from "./brief.js";
 import type { GrowthPolicy } from "./policy.js";
 import type { Ledger, Log, Treasury, ChainConfig } from "../ledger.js";
 import type { Fetch } from "./http.js";
+import { GrowthExpenses } from "./expenses.js";
 
 export type GrowthRuntime = {
   engine: Engine;
   board: Board;
   loop: GrowthLoop;
   adminToken: string;
+  expenses: GrowthExpenses;
   /** Returns true when the request was handled. */
   handle(req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean>;
   stop(): Promise<void>;
@@ -74,6 +76,10 @@ export function createGrowthRuntime(o: RuntimeOptions): GrowthRuntime {
   const engine = new Engine({ state, cycles, events, optin, tools, llm, env, dryRun, loadBrief: o.loadBrief ?? loadBrief, loadPolicy: policyLoader, readChain, board, log: o.log, now });
   const loop = new GrowthLoop(engine);
   const lifecycle = new GrowthLifecycle();
+  const expenses = new GrowthExpenses(join(dir, "expenses.json"), state, o.ledger, env.GROWTH_EXPENSE_PAYEE,
+    env.GROWTH_EXPENSE_USD_PER_NEAR ?? String(policyLoader().board.usd_per_near), !dryRun && env.GROWTH_EXPENSE_WRITES === "on");
+  const recordExpense = expenses.record.bind(expenses);
+  expenses.record = (id, input) => lifecycle.run(() => recordExpense(id, input));
   const act = engine.act.bind(engine), executeRunnable = engine.executeRunnable.bind(engine), execute = engine.execute.bind(engine);
   engine.act = (p, run) => lifecycle.run(() => act(p, run));
   engine.executeRunnable = () => lifecycle.run(() => executeRunnable());
@@ -98,7 +104,7 @@ export function createGrowthRuntime(o: RuntimeOptions): GrowthRuntime {
     timer.unref();
   }
   const rt: GrowthRuntime = {
-    engine, board, loop, adminToken,
+    engine, board, loop, adminToken, expenses,
     handle: (req, res, url) => {
       if (url.pathname !== "/growth" && !url.pathname.startsWith("/api/growth/")) return Promise.resolve(false);
       if (stopping) { res.writeHead(503, { "content-type": "application/json" }); res.end(JSON.stringify({ error: "growth is shutting down" })); return Promise.resolve(true); }

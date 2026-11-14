@@ -1,5 +1,8 @@
-import { record, tokens } from "./common.js";
-import { readCliVersion, resolveExecutablePath } from "./probe.js";
+import { access, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { homedir } from "node:os";
+import { LOCALE_ENV, installGrants, mergeGrants, privateEnv, record, tokens } from "./common.js";
+import { commandOutput, isScript, linkCredential, readCliVersion, resolveExecutablePath, restoreCredential } from "./probe.js";
 import type { Parsed, ProviderAdapter } from "./types.js";
 
 /** Pi message usage as bb's Pi bridge records it. Pi's `cost` is computed from its own model
@@ -20,18 +23,46 @@ export function parsePi(event: Record<string, unknown>): Parsed {
   return seen ? { total, final: true, ...(text !== undefined ? { text } : {}) } : { error: "Pi finished without usage" };
 }
 
-const NOT_ENABLED = "Pi runs are not enabled: its headless flags, sign-in files and sandbox were never exercised (Pi was not installed on the reference machine)";
+const FLAGS = ["--no-tools", "--no-mcp", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files"];
+export const piArgv = (model: string, prompt: string) => ["--print", "--mode", "json", "--no-session", ...FLAGS, "--model", model, "--", prompt];
+const authPath = (home = homedir()) => join(process.env.PI_CODING_AGENT_DIR || join(home, ".pi", "agent"), "auth.json");
 
-/** Discovery and metering only. bb drives Pi over its RPC mode with tools enabled, which this
- * worker must not do, and no confined one-shot launch has been verified. */
+export async function piInstall(executable: string) {
+  if (!await isScript(executable)) return { command: executable, prefix: [] as string[], root: dirname(executable) };
+  const root = dirname(dirname(executable));
+  const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as { name?: string };
+  if (!["@mariozechner/pi-coding-agent", "@earendil-works/pi-coding-agent"].includes(pkg.name ?? "") || executable !== join(root, "dist", "cli.js")) throw new Error("Unsupported Pi launcher; install the official CLI");
+  return { command: await realpath(process.execPath), prefix: [executable], root };
+}
+
+/** Opt-in one-shot adapter. Private config carries auth only; extensions/tools/context discovery stay off. */
 export const pi: ProviderAdapter = {
   id: "pi", displayName: "Pi", costSource: "list-price", confinement: "tools-disabled", verified: false,
-  signInCommand: "pi (then /login)", installUrl: "https://github.com/badlogic/pi-mono",
+  signInCommand: "pi (then /login)", installUrl: "https://github.com/earendil-works/pi",
   async health() {
     const executable = await resolveExecutablePath("pi");
     if (!executable) return { status: "not_installed" };
-    return { status: "unsupported_install", version: await readCliVersion("pi") ?? undefined, executable, message: NOT_ENABLED };
+    const version = await readCliVersion("pi") ?? undefined;
+    try { await piInstall(executable); } catch { return { status: "unsupported_install", version, executable, message: "Use an official Pi native or npm install" }; }
+    const help = await commandOutput(executable, ["--help"]);
+    if (!help || FLAGS.some(flag => !help.includes(flag))) return { status: "unsupported_version", version, executable, message: "Pi must support all tool/resource/context disabling flags" };
+    try { await access(authPath()); } catch { return { status: "unauthenticated", version, executable }; }
+    return { status: "ready", version, executable, message: "Experimental; live usage and sign-in need verification" };
   },
-  launch: async () => { throw new Error(NOT_ENABLED); },
+  async launch({ model, root, home, executable }) {
+    const install = await piInstall(executable), agentDir = join(root, "agent"), cwd = join(root, "w");
+    const help = await commandOutput(executable, ["--help"]);
+    if (!help || FLAGS.some(flag => !help.includes(flag))) throw new Error("Pi lacks required confinement flags");
+    for (const dir of [agentDir, cwd, join(root, "home")]) await mkdir(dir, { recursive: true });
+    const auth = authPath(home), link = join(agentDir, "auth.json");
+    await linkCredential(auth, link);
+    await writeFile(join(agentDir, "settings.json"), JSON.stringify({ packages: [], extensions: [], skills: [], promptTemplates: [], themes: [], enableSkillCommands: false }), { mode: 0o600 });
+    return {
+      command: install.command, args: [...install.prefix, ...piArgv(model, "")], cwd, input: "argv", passEnv: LOCALE_ENV,
+      env: privateEnv(root, { PI_CODING_AGENT_DIR: agentDir, PI_SKIP_VERSION_CHECK: "1" }),
+      grants: mergeGrants(installGrants(executable, home, install.root), { readFiles: [auth, install.command], writeFiles: [auth], exec: { files: [install.command] } }),
+      settle: async () => { await restoreCredential(auth, link); },
+    };
+  },
   parser: () => ({ event: parsePi }),
 };

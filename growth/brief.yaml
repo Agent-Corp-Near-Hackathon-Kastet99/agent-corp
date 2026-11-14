@@ -1,9 +1,9 @@
 # Growth harness — company brief. Owner fills this in; the CEO agent reads it every cycle.
 product:
   name: "RAM HEIST"
-  pitch: "Isometric 3D stealth-puzzle: sneak into homes, dodge sightlines, recover the RAM."
+  pitch: "2D stealth-puzzle: sneak into homes, dodge sightlines, recover the RAM."
   price: "1 tNEAR season pass (DEMO / testnet)"
-  url: "https://REPLACE-ME.vercel.app"      # public landing/game page; every post links here with UTMs
+  url: "https://ram-heist-game.vercel.app/store"      # public landing/game page; every post links here with UTMs
 icp:
   primary: "Casual and indie stealth-puzzle players on desktop browsers"
   secondary: "NEAR ecosystem builders and hackathon judges who like shipped agent-run businesses"
@@ -14,8 +14,8 @@ voice:
   tone: "dry, heist-movie, self-aware satire"
   avoid: ["hype", "income claims", "emoji spam"]
 visual:
-  style: "isometric, neon-on-dark, clean silhouettes"
-  palette: "REPLACE-ME"
+  style: "cartoon top-down house, warm colors, readable silhouettes"
+  palette: "forest green, warm cream, terracotta, golden RAM"
 constraints:
   legal: "no dividend, ownership or returns language"
   label: "DEMO / testnet"

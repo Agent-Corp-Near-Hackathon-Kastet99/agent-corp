@@ -47,6 +47,7 @@ h2{font-size:12px;margin:0 0 8px;color:var(--dim);text-transform:uppercase;lette
 <section><h2>Human tasks</h2><div id="tasks"></div></section>
 <section><h2>Funnel (7 days)</h2><div id="funnel" class="funnel"></div><div id="funnelnote" class="dim" style="margin-top:6px"></div></section>
 <section class="wide"><h2>Board vote</h2><div id="board"></div></section>
+<section class="wide"><h2>Confirmed growth expenses · testnet reimbursements</h2><div id="expenses"></div></section>
 <section><h2>Learnings</h2><div id="learn" class="pre dim"></div></section>
 <section class="wide"><h2>Actions</h2><div id="actions" class="feed"></div></section>
 <section class="wide"><h2>Activity feed</h2><div id="feed" class="feed"></div></section>
@@ -114,6 +115,16 @@ function boardPanel(b){
     root.appendChild(el("div","dim",t));
   });
 }
+function expensePanel(s){
+  var root=$("expenses");root.textContent="";var data=s.expenses||{rows:[],enabled:false};
+  root.appendChild(el("div","dim",data.enabled?"Record a paid service receipt. CEO approval and oracle payment use tNEAR at the configured demo rate.":"Disabled. Set GROWTH_EXPENSE_PAYEE and GROWTH_EXPENSE_WRITES=on in live mode. Estimates and dry-run costs are never paid invoices."));
+  data.rows.forEach(function(r){var row=el("div","card",r.status+" · $"+r.actualUsd+" · "+r.payee+" · action "+r.actionId);if(r.status!=="PAID"&&data.enabled){var button=el("button","","Reconcile / retry payment");button.onclick=act("expense",function(){return api("/api/growth/expenses/"+r.actionId,{reconcile:true});});row.appendChild(button);}root.appendChild(row);});
+  if(!data.enabled)return;
+  s.actions.filter(function(a){return a.status==="EXECUTED"&&!a.summary.startsWith("[DRY]")&&["llm","exa","fal"].indexOf(a.kind.split(".")[0])>=0&&!data.rows.some(function(r){return r.actionId===a.id;});}).forEach(function(a){
+    var card=el("div","card",a.kind+" · "+a.summary);var button=el("button","","Record confirmed paid receipt");
+    button.onclick=act("expense",function(){var by=approver();var amount=prompt("Actual paid USD amount (not the estimate):");var url=prompt("HTTPS receipt URL, without secret tokens:");if(!by||!amount||!url)return Promise.reject(new Error("Receipt, actual amount and approver required"));return api("/api/growth/expenses/"+a.id,{by:by,actualUsd:amount,evidenceUrl:url});});card.appendChild(button);root.appendChild(card);
+  });
+}
 function render(s){
   var m=s.mode;var mode=$("mode");mode.textContent=m.dryRun?"DRY-RUN (nothing leaves this machine)":"LIVE";mode.className="badge "+(m.dryRun?"dry":"live");
   $("llm").textContent="LLM: "+(m.llmLive?m.model:"dry stand-in");
@@ -121,6 +132,7 @@ function render(s){
   var b=$("budget");b.textContent="spent $"+s.budget.spentUsd.toFixed(2)+" / $"+s.budget.totalCapUsd+" · cycle cap $"+s.budget.effectiveCycleCapUsd+(m.paused?" · PAUSED":"")+(m.urlIsPlaceholder?" · product.url is a placeholder":"");b.className="badge"+(m.paused||(m.urlIsPlaceholder&&!m.dryRun)?" bad":"");
   $("run").disabled=m.busy;
   boardPanel(s.board);
+  expensePanel(s);
   var cyc=s.cycles.length?s.cycles[s.cycles.length-1]:null;
   var ceo=$("ceo");ceo.textContent="";
   if(cyc&&cyc.directive){var d=cyc.directive;

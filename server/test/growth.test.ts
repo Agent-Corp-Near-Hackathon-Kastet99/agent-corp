@@ -20,7 +20,7 @@ describe("growth config files", () => {
     expect(loadPolicy().levels["bluesky.post"]).toBe("L1");
     expect(loadBrief().product.name).toBe("RAM HEIST");
   });
-  it("placeholder product URL is detected", () => { expect(hasPlaceholderUrl(loadBrief())).toBe(true); });
+  it("placeholder product URL is detected", () => { const brief=loadBrief(); expect(hasPlaceholderUrl({...brief,product:{...brief.product,url:"https://REPLACE-ME.vercel.app"}})).toBe(true); expect(hasPlaceholderUrl(brief)).toBe(false); });
   it("rejects bad policy", () => {
     const base = rawPolicy();
     expect(() => validatePolicy({ ...base, levels: { ...base.levels, "x.post": "L9" } })).toThrow("unknown level");
