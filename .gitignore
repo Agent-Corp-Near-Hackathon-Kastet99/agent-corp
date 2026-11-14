@@ -14,8 +14,7 @@
 credentials.json
 secrets.*
 
-# Documentation
-*.md
+# Documentation is source: keep plans, glossary, ADRs and handoffs tracked.
 
 # Dependencies and generated output
 node_modules/
@@ -23,8 +22,23 @@ dist/
 build/
 coverage/
 target/
+artifacts/
+.vercel/
+worker/.smoke/
 bin/
+!worker/bin/
+!worker/bin/agent-corp-worker
 
 # Local tooling and operating-system files
 .DS_Store
 .gstack/
+
+# Testnet keys written by setup
+.keys/
+# Local server state
+.data/
+
+!README.md
+
+# Growth harness: keep the example file tracked, real values never
+!.env.growth.example

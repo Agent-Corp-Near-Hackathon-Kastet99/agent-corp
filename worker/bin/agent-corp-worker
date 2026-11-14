@@ -1,0 +1,2 @@
+#!/bin/sh
+exec pnpm --dir "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)" exec tsx src/cli.ts "$@"

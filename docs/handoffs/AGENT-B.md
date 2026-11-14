@@ -1,0 +1,11 @@
+# Concurrent Agent B handoff
+
+> Historical handoff: deployment, test counts and remaining work below describe that stage. Current status: [project status](../AGENT-CORP.md#10-implementation-status-and-migration), [canonical live verification](LIVE-VERIFICATION.md) and [provider support](../provider-integration/README.md). The canonical contract is now deployed and two real Claude sessions have been credited on-chain.
+
+Source thread: `thr_f8mgqqu8dx`. Stable uncommitted source preserved as `24c74df19b244acceec16b00fc258ad2368c882a` on `task/step0-agent-b`, in `/Users/kastet/Agent-Corp-worktrees/agent-b`. Thread explicitly stopped writes before coordinator snapshot. Snapshot includes inherited files, not just new authorship; original checkout/index/credentials were not reset.
+
+Delivered functionality: ledger/store/game pages, two resident patrols, server-authoritative demo game sessions, paged ledger, dry Intents preview, authenticated WebSocket worker dispatch, retry-safe contribution references, per-wallet caps, credential exporter, macOS sandbox and tests. Coordinator retained these while reconciling canonical Ledger/CompanyAgents, real NEP-413 signing, durable cap/session lifecycle, safe HTTP factory, validated configuration/credentials and snapshot Store.
+
+Agent B reported 31 TS tests, 50 Rust tests, browser smoke and full interim testnet demo with FINAL completion/final views. Interim deployment `contract.agentcorp-862d34c2.testnet` predates canonical Board-budget changes. Reported close receipt: https://testnet.nearblocks.io/txns/Etqeb1awhKTE7r5mBpcBsL69LmKYGFHrdMTTpeLKhL4U . Coordinator did not repeat or claim that network run as verification of canonical code.
+
+Agreement: canonical contract includes Board JSON budget options, initially_paused, separate refund liability, pending-transfer close guard, record_contribution_once and has_contribution_reference. Worker oracle key includes record_contribution_once. Existing `.keys/active`, `testnet-v3.json` and original testnet.json remain untouched. No canonical deployment by coordinator. Game authentication remains server-controlled demo customer, not external-wallet authentication. Shell sandbox check passes; live signed-in inference unverified.

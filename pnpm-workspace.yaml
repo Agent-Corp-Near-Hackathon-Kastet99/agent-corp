@@ -2,4 +2,3 @@ packages:
   - shared
   - worker
   - server
-  - server/web

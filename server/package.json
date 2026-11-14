@@ -3,14 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "tsx watch src/index.ts", "start": "tsx src/index.ts", "test": "vitest run", "typecheck": "tsc --noEmit" },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "setup": "tsx scripts/setup.ts",
+    "constraints": "tsx scripts/constraints.ts",
+    "demo": "tsx scripts/demo.ts",
+    "growth": "tsx scripts/growth.ts"
+  },
   "dependencies": {
     "@agentcorp/shared": "workspace:*",
-    "better-sqlite3": "^11.7.0",
-    "ws": "^8.18.0"
+    "near-api-js": "7.5.3",
+    "ws": "^8.18.0",
+    "yaml": "2.9.1"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
     "@types/ws": "^8.5.13",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",

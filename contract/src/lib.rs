@@ -1,40 +1,55 @@
-//! Agent Corp contract: job escrow, revenue split by metered units, board votes.
+//! Agent Corp contract: product revenue, operating costs, weekly distribution by contribution units.
 //!
-//! Money flow for a paid job (see docs/design-hackathon-mvp.md, Eng Review D3/D4/D5/D10/D12/D14/D24):
-//! - `create_job` (oracle) -> `pay` (customer, escrow) -> `settle` (oracle) or `refund` (payer, after timeout).
-//! - On settle the price is split by basis points into:
-//!   - contributor pool: distributed to ALL contributors pro-rata to lifetime units through a
-//!     reward-per-unit accumulator (O(payees of this job)); shares become claimable via `withdraw()`.
-//!   - platform: pushed with a `#[private]` failure callback that credits claimable on failure.
-//!   - treasury: never transferred; it is derived from the contract balance minus storage and
-//!     tracked liabilities, and receives all rounding dust from the bps split.
+//! Money flow (see docs/AGENT-CORP.md):
+//! - Contributors donate metered AI usage. The accounting oracle records it as lifetime
+//!   contribution units (`record_contribution`). Units never trigger a payout on their own.
+//! - Customers buy the product (`buy_pass`). The payment is revenue of the open period.
+//! - The CEO agent approves operating costs (`record_expense`); the oracle pays them
+//!   (`pay_expense`). Costs are paid from period revenue first, then from the expense reserve.
+//! - At period end the oracle calls `close_distribution`. Net profit
+//!   `max(0, revenue - costs - expense-reserve top-up)` plus any carried remainder is split
+//!   pro rata by lifetime units and credited to `claimable`. Contributors then call
+//!   `withdraw_distribution`.
+//! - The owner (a human) only sets constraints (`set_constraints`) and the kill switch
+//!   (`set_paused`). Agents cannot change either.
 //! - 1 unit = 1 micro-USD of list-price-equivalent inference.
 
-use near_sdk::json_types::{U128, U64};
+use near_sdk::json_types::{U64, U128};
 use near_sdk::store::{LookupMap, Vector};
 use near_sdk::{
-    env, near, require, AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise,
+    AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise, env, near, require,
 };
 
-uint::construct_uint! {
-    /// 256-bit unsigned integer used for all share math (D14).
-    pub struct U256(4);
+// Lint originates in uint's generated implementation, not handwritten arithmetic.
+#[allow(clippy::manual_div_ceil)]
+mod wide {
+    uint::construct_uint! {
+        /// 256-bit unsigned integer used for all share math.
+        pub struct U256(4);
+    }
 }
+pub use wide::U256;
 
-/// Accumulator scale (1e24).
-pub const ACC_SCALE: u128 = 1_000_000_000_000_000_000_000_000;
-pub const BPS_DENOM: u16 = 10_000;
-/// Per-account cap on units in one settle report (D12): $5 list-price-equivalent.
+pub const BPS_DENOM: u128 = 10_000;
+/// Per-account cap on units in one contribution report: $5 list-price-equivalent.
 pub const MAX_UNITS_PER_REPORT: u128 = 5_000_000;
-/// Bound on usage entries per settle so gas stays bounded.
-pub const MAX_USAGES_PER_SETTLE: usize = 20;
-pub const DEFAULT_REFUND_TIMEOUT_SECS: u64 = 600;
+/// `close_distribution` credits every contributor in one call, so the set is bounded.
+pub const MAX_CONTRIBUTORS: u32 = 100;
 const CALLBACK_GAS: Gas = Gas::from_tgas(10);
-const MAX_JOB_ID_LEN: usize = 64;
+const MAX_REFERENCE_LEN: usize = 200;
 const MAX_OPTIONS: usize = 6;
 const MAX_OPTION_LEN: usize = 160;
 const MAX_TITLE_LEN: usize = 200;
-const PROPOSAL_KINDS: [&str; 1] = ["BudgetSplit"];
+const PROPOSAL_KINDS: [&str; 1] = ["Budget"];
+pub const EXPENSE_CATEGORIES: [&str; 6] = [
+    "hosting",
+    "domain",
+    "api",
+    "payment_fee",
+    "contractor",
+    "other",
+];
+const NS: u64 = 1_000_000_000;
 
 /// `a * b / c` with a 256-bit intermediate. Panics on `c == 0` or if the result exceeds u128.
 pub fn mul_div(a: u128, b: u128, c: u128) -> u128 {
@@ -44,32 +59,34 @@ pub fn mul_div(a: u128, b: u128, c: u128) -> u128 {
     r.as_u128()
 }
 
-fn u256_to_words(v: U256) -> [u64; 4] {
-    v.0
-}
-
-fn words_to_u256(w: [u64; 4]) -> U256 {
-    U256(w)
-}
-
-/// Split of a sale price. All values in yoctoNEAR.
+/// Result of closing one period. All values in yoctoNEAR.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub struct SaleSplit {
-    pub contributor_pool: u128,
-    pub treasury: u128,
-    pub platform: u128,
+pub struct CloseMath {
+    /// Added to the expense reserve.
+    pub reserve_top_up: u128,
+    /// Taken from the expense reserve because paid costs exceeded revenue.
+    pub reserve_draw: u128,
+    /// `max(0, revenue - costs - reserve_top_up)`.
+    pub period_net: u128,
 }
 
-/// Pure split rule: bps legs rounded down, all dust to treasury. If no contributor holds any
-/// lifetime units, the contributor pool also goes to treasury.
-pub fn compute_split(price: u128, split: &Split, total_units_after: u128) -> SaleSplit {
-    let platform = mul_div(price, split.platform_bps as u128, BPS_DENOM as u128);
-    let mut pool = mul_div(price, split.contributor_bps as u128, BPS_DENOM as u128);
-    if total_units_after == 0 {
-        pool = 0;
+/// Pure close rule. The top-up is `reserve_bps` of revenue, capped so net never goes below zero.
+/// A loss (costs > revenue) is covered by the expense reserve and is not carried forward.
+pub fn compute_close(revenue: u128, costs: u128, reserve_bps: u16) -> CloseMath {
+    if costs >= revenue {
+        return CloseMath {
+            reserve_top_up: 0,
+            reserve_draw: costs - revenue,
+            period_net: 0,
+        };
     }
-    let treasury = price - platform - pool;
-    SaleSplit { contributor_pool: pool, treasury, platform }
+    let surplus = revenue - costs;
+    let top_up = mul_div(revenue, reserve_bps as u128, BPS_DENOM).min(surplus);
+    CloseMath {
+        reserve_top_up: top_up,
+        reserve_draw: 0,
+        period_net: surplus - top_up,
+    }
 }
 
 #[near(serializers = [borsh])]
@@ -78,89 +95,61 @@ enum StorageKey {
     Contributors,
     ContributorIds,
     Claimable,
-    Jobs,
-    Receipts,
+    Passes,
+    Sales,
+    Expenses,
+    Periods,
+    Allocations,
     Proposals,
     Votes,
+    Refunds,
+    ContributionReports,
 }
 
+/// Limits the owner sets. Agents operate inside them and cannot change them.
 #[near(serializers = [borsh, json])]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Split {
-    pub contributor_bps: u16,
-    pub treasury_bps: u16,
-    pub platform_bps: u16,
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Constraints {
+    /// Minimum (and exact) price of one pass, yoctoNEAR.
+    pub pass_price: U128,
+    /// Share of period revenue moved to the expense reserve at close, in bps.
+    pub expense_reserve_bps: u16,
+    /// Length of one distribution period, seconds.
+    pub period_secs: U64,
+    /// Maximum total of expenses the CEO may approve in one period, yoctoNEAR.
+    pub max_expense_per_period: U128,
 }
 
-impl Split {
+impl Constraints {
     fn assert_valid(&self) {
+        require!(self.pass_price.0 > 0, "pass_price must be positive");
         require!(
-            self.contributor_bps as u32 + self.treasury_bps as u32 + self.platform_bps as u32
-                == BPS_DENOM as u32,
-            "split must sum to 10000 bps"
+            self.expense_reserve_bps as u128 <= BPS_DENOM,
+            "expense_reserve_bps above 10000"
+        );
+        require!(self.period_secs.0 > 0, "period_secs must be positive");
+        require!(
+            self.period_secs.0 <= (u64::MAX - env::block_timestamp()) / NS,
+            "period duration overflows timestamp"
         );
     }
 }
 
-impl Default for Split {
-    /// Placeholder split (Open Question 2): 70% contributors / 20% treasury / 10% platform.
+impl Default for Constraints {
+    /// 1 NEAR pass, 10% expense reserve, weekly period, 0.5 NEAR expense cap per period.
     fn default() -> Self {
-        Self { contributor_bps: 7_000, treasury_bps: 2_000, platform_bps: 1_000 }
+        Self {
+            pass_price: U128(NearToken::from_near(1).as_yoctonear()),
+            expense_reserve_bps: 1_000,
+            period_secs: U64(7 * 24 * 3600),
+            max_expense_per_period: U128(NearToken::from_millinear(500).as_yoctonear()),
+        }
     }
-}
-
-#[near(serializers = [borsh, json])]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum JobStatus {
-    Created,
-    Paid,
-    Settled,
-    Refunded,
-}
-
-#[near(serializers = [borsh])]
-pub struct Job {
-    price: u128,
-    status: JobStatus,
-    payer: Option<AccountId>,
-    created_at: u64,
-    paid_at: u64,
-}
-
-#[near(serializers = [json])]
-pub struct JobView {
-    pub job_id: String,
-    pub price: U128,
-    pub status: JobStatus,
-    pub payer: Option<AccountId>,
-    pub created_at: U64,
-    pub paid_at: U64,
-    /// Earliest timestamp (ns) at which the payer may refund, when Paid.
-    pub refundable_at: Option<U64>,
-}
-
-#[near(serializers = [borsh, json])]
-#[derive(Clone)]
-pub struct Receipt {
-    pub job_id: String,
-    pub price: U128,
-    pub payer: Option<AccountId>,
-    /// Workers that served this job (attribution) and their metered units.
-    pub usages: Vec<(AccountId, U128)>,
-    pub job_units: U128,
-    pub contributor_pool: U128,
-    pub treasury_share: U128,
-    pub platform_share: U128,
-    pub platform: AccountId,
-    pub total_units_after: U128,
-    pub settled_at: U64,
 }
 
 #[near(serializers = [borsh])]
 pub struct Contributor {
     units: u128,
-    /// Accumulator value at this contributor's last checkpoint (U256 words).
-    acc_snapshot: [u64; 4],
     registered_at: u64,
 }
 
@@ -168,11 +157,101 @@ pub struct Contributor {
 pub struct ContributorView {
     pub account_id: AccountId,
     pub units: U128,
-    /// Claimable now, including overhead share not yet checkpointed.
+    /// Claimable from closed periods only.
     pub claimable: U128,
     /// Share of all lifetime units, in bps.
     pub share_bps: u32,
     pub registered_at: U64,
+}
+
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
+pub struct Pass {
+    pub account_id: AccountId,
+    pub purchases: u32,
+    pub total_paid: U128,
+    pub first_paid_at: U64,
+    pub last_paid_at: U64,
+}
+
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
+pub struct Sale {
+    pub id: u32,
+    pub account_id: AccountId,
+    pub product: String,
+    pub amount: U128,
+    pub period: u64,
+    pub paid_at: U64,
+}
+
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExpenseStatus {
+    Approved,
+    Paying,
+    Paid,
+}
+
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
+pub struct Expense {
+    pub id: u32,
+    pub category: String,
+    pub amount: U128,
+    /// Period in which the expense was approved; replaced by the paying period once paid.
+    pub period: u64,
+    pub reference: String,
+    pub payee: AccountId,
+    pub approver: AccountId,
+    pub status: ExpenseStatus,
+    pub created_at: U64,
+    pub paid_at: U64,
+}
+
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PeriodStatus {
+    Open,
+    Closed,
+}
+
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
+pub struct Period {
+    pub id: u64,
+    pub starts_at: U64,
+    pub ends_at: U64,
+    pub status: PeriodStatus,
+    pub revenue: U128,
+    /// Paid operating costs.
+    pub operating_costs: U128,
+    /// Total of expenses approved in this period (checked against the owner's cap).
+    pub expenses_approved: U128,
+    pub expense_reserve_top_up: U128,
+    pub expense_reserve_draw: U128,
+    /// Undistributed remainder carried in from earlier closes.
+    pub carried_in: U128,
+    pub net_distributable: U128,
+    pub distributed: U128,
+    pub total_units_at_close: U128,
+    pub closed_at: U64,
+    /// True when the period was closed before `ends_at` (demo mode only).
+    pub demo_close: bool,
+}
+
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
+pub struct Allocation {
+    pub account_id: AccountId,
+    pub units: U128,
+    pub amount: U128,
+}
+
+#[near(serializers = [json])]
+pub struct PeriodReceipt {
+    pub period: Period,
+    pub allocations: Vec<Allocation>,
 }
 
 #[near(serializers = [borsh, json])]
@@ -191,7 +270,7 @@ pub struct Proposal {
     pub kind: String,
     pub title: String,
     pub options: Vec<String>,
-    /// Weighted tally per option (weight = voter's lifetime units at vote time, D6).
+    /// Weighted tally per option (weight = voter's lifetime units at vote time).
     pub tallies: Vec<U128>,
     pub voters: u32,
     pub proposer: AccountId,
@@ -211,6 +290,19 @@ pub struct Vote {
 pub struct Budget {
     pub proposal_id: u64,
     pub option: String,
+    pub max_expense_per_period: U128,
+}
+
+#[near(serializers = [json])]
+#[serde(deny_unknown_fields)]
+pub struct BudgetOption {
+    pub max_expense_per_period: U128,
+}
+
+fn parse_budget(option: &str) -> BudgetOption {
+    near_sdk::serde_json::from_str(option).unwrap_or_else(|_| {
+        env::panic_str("budget option must encode max_expense_per_period as U128")
+    })
 }
 
 #[near(serializers = [json])]
@@ -218,10 +310,26 @@ pub struct Config {
     pub owner: AccountId,
     pub oracle: AccountId,
     pub ceo: AccountId,
-    pub platform: AccountId,
-    pub split: Split,
-    pub refund_timeout_secs: U64,
+    pub constraints: Constraints,
+    pub paused: bool,
+    pub demo_mode: bool,
     pub max_units_per_report: U128,
+}
+
+#[near(serializers = [json])]
+pub struct Treasury {
+    pub period_id: u64,
+    pub period_revenue: U128,
+    pub period_costs: U128,
+    /// Held back for future company expenses.
+    pub expense_reserve: U128,
+    /// Set aside for contributors: claimable balances + undistributed remainder.
+    pub distribution_reserve: U128,
+    pub claimable_total: U128,
+    pub distribution_carry: U128,
+    pub account_balance: U128,
+    pub refund_total: U128,
+    pub pending_expense_payments: u32,
 }
 
 #[near(serializers = [json])]
@@ -229,15 +337,9 @@ pub struct Stats {
     pub contributors: u32,
     pub contributors_with_units: u32,
     pub total_units: U128,
-    pub escrow_total: U128,
-    pub claimable_total: U128,
-    pub overhead_outstanding: U128,
-    pub acc_per_unit: String,
-    pub storage_usage: U64,
-    pub storage_byte_cost: U128,
-    pub account_balance: U128,
-    pub treasury: U128,
-    pub jobs: u64,
+    pub sales: u32,
+    pub expenses: u32,
+    pub periods: u64,
     pub proposals: u64,
 }
 
@@ -247,27 +349,31 @@ pub struct Contract {
     owner: AccountId,
     oracle: AccountId,
     ceo: AccountId,
-    platform: AccountId,
-    split: Split,
-    refund_timeout_ns: u64,
+    constraints: Constraints,
+    paused: bool,
+    demo_mode: bool,
 
+    contribution_reports: LookupMap<String, (AccountId, u128)>,
     contributors: LookupMap<AccountId, Contributor>,
     contributor_ids: Vector<AccountId>,
     contributors_with_units: u32,
     total_units: u128,
-    acc_per_unit: [u64; 4],
 
     claimable: LookupMap<AccountId, u128>,
-    /// Liabilities excluded from the derived treasury (D5).
-    escrow_total: u128,
     claimable_total: u128,
-    /// Contributor-pool funds credited to the accumulator but not yet checkpointed into
-    /// claimable. Rounding residue stays here forever (D24).
-    overhead_outstanding: u128,
+    refunds: LookupMap<AccountId, u128>,
+    refund_total: u128,
+    pending_expense_payments: u32,
+    expense_reserve: u128,
+    distribution_carry: u128,
 
-    jobs: LookupMap<String, Job>,
-    job_count: u64,
-    receipts: LookupMap<String, Receipt>,
+    passes: LookupMap<AccountId, Pass>,
+    sales: Vector<Sale>,
+    expenses: Vector<Expense>,
+
+    periods: LookupMap<u64, Period>,
+    current_period: u64,
+    allocations: LookupMap<u64, Vec<Allocation>>,
 
     proposals: LookupMap<u64, Proposal>,
     next_proposal_id: u64,
@@ -280,47 +386,83 @@ fn emit(event: &str, data: near_sdk::serde_json::Value) {
         "EVENT_JSON:{}",
         near_sdk::serde_json::json!({
             "standard": "agentcorp",
-            "version": "1.0.0",
+            "version": "2.0.0",
             "event": event,
             "data": [data],
         })
     ));
 }
 
+fn new_period(id: u64, starts_at: u64, period_secs: u64) -> Period {
+    Period {
+        id,
+        starts_at: U64(starts_at),
+        ends_at: U64(starts_at + period_secs * NS),
+        status: PeriodStatus::Open,
+        revenue: U128(0),
+        operating_costs: U128(0),
+        expenses_approved: U128(0),
+        expense_reserve_top_up: U128(0),
+        expense_reserve_draw: U128(0),
+        carried_in: U128(0),
+        net_distributable: U128(0),
+        distributed: U128(0),
+        total_units_at_close: U128(0),
+        closed_at: U64(0),
+        demo_close: false,
+    }
+}
+
 #[near]
 impl Contract {
+    /// `demo_mode` allows closing a period before it ends; such closes are flagged `demo_close`.
+    /// It can only be set here, so a production deployment cannot be switched into it.
     #[init]
     pub fn new(
         owner: AccountId,
         oracle: AccountId,
         ceo: AccountId,
-        platform: AccountId,
-        split: Option<Split>,
-        refund_timeout_secs: Option<U64>,
+        constraints: Option<Constraints>,
+        demo_mode: Option<bool>,
+        initially_paused: Option<bool>,
     ) -> Self {
-        require!(owner != oracle, "owner and oracle must be different accounts");
-        let split = split.unwrap_or_default();
-        split.assert_valid();
-        let timeout = refund_timeout_secs.map(|t| t.0).unwrap_or(DEFAULT_REFUND_TIMEOUT_SECS);
+        require!(
+            owner != oracle && owner != ceo,
+            "owner must differ from oracle and CEO"
+        );
+        require!(oracle != ceo, "oracle and CEO must be different accounts");
+        let constraints = constraints.unwrap_or_default();
+        constraints.assert_valid();
+        let mut periods = LookupMap::new(StorageKey::Periods);
+        periods.insert(
+            0,
+            new_period(0, env::block_timestamp(), constraints.period_secs.0),
+        );
         Self {
             owner,
             oracle,
             ceo,
-            platform,
-            split,
-            refund_timeout_ns: timeout * 1_000_000_000,
+            constraints,
+            paused: initially_paused.unwrap_or(false),
+            demo_mode: demo_mode.unwrap_or(false),
+            contribution_reports: LookupMap::new(StorageKey::ContributionReports),
             contributors: LookupMap::new(StorageKey::Contributors),
             contributor_ids: Vector::new(StorageKey::ContributorIds),
             contributors_with_units: 0,
             total_units: 0,
-            acc_per_unit: [0; 4],
             claimable: LookupMap::new(StorageKey::Claimable),
-            escrow_total: 0,
             claimable_total: 0,
-            overhead_outstanding: 0,
-            jobs: LookupMap::new(StorageKey::Jobs),
-            job_count: 0,
-            receipts: LookupMap::new(StorageKey::Receipts),
+            refunds: LookupMap::new(StorageKey::Refunds),
+            refund_total: 0,
+            pending_expense_payments: 0,
+            expense_reserve: 0,
+            distribution_carry: 0,
+            passes: LookupMap::new(StorageKey::Passes),
+            sales: Vector::new(StorageKey::Sales),
+            expenses: Vector::new(StorageKey::Expenses),
+            periods,
+            current_period: 0,
+            allocations: LookupMap::new(StorageKey::Allocations),
             proposals: LookupMap::new(StorageKey::Proposals),
             next_proposal_id: 0,
             votes: LookupMap::new(StorageKey::Votes),
@@ -328,199 +470,419 @@ impl Contract {
         }
     }
 
-    // ---------------------------------------------------------------- admin (owner)
+    // ---------------------------------------------------------------- owner (human) controls
 
-    pub fn set_split(&mut self, split: Split) {
+    /// Kill switch. While paused, sales and every agent action are rejected.
+    /// Contributors can still withdraw balances from closed periods.
+    pub fn set_paused(&mut self, paused: bool) {
         self.assert_owner();
-        split.assert_valid();
-        self.split = split;
-        emit("set_split", near_sdk::serde_json::to_value(split).unwrap());
+        self.paused = paused;
+        emit(
+            "set_paused",
+            near_sdk::serde_json::json!({ "paused": paused }),
+        );
+    }
+
+    /// Applies to the next sale, the next expense approval and the next period.
+    pub fn set_constraints(&mut self, constraints: Constraints) {
+        self.assert_owner();
+        constraints.assert_valid();
+        emit(
+            "set_constraints",
+            near_sdk::serde_json::to_value(&constraints).unwrap(),
+        );
+        self.constraints = constraints;
     }
 
     pub fn set_oracle(&mut self, oracle: AccountId) {
         self.assert_owner();
-        require!(oracle != self.owner, "owner and oracle must be different accounts");
+        require!(
+            oracle != self.owner && oracle != self.ceo,
+            "oracle must be a separate account"
+        );
+        emit(
+            "set_oracle",
+            near_sdk::serde_json::json!({ "oracle": oracle }),
+        );
         self.oracle = oracle;
     }
 
     pub fn set_ceo(&mut self, ceo: AccountId) {
         self.assert_owner();
+        require!(
+            ceo != self.owner && ceo != self.oracle,
+            "CEO must be a separate account"
+        );
+        emit("set_ceo", near_sdk::serde_json::json!({ "ceo": ceo }));
         self.ceo = ceo;
-    }
-
-    pub fn set_platform(&mut self, platform: AccountId) {
-        self.assert_owner();
-        self.platform = platform;
     }
 
     // ---------------------------------------------------------------- contributors (oracle)
 
-    /// Oracle-only, after NEP-413 verification off-chain. Returns false if already registered.
-    pub fn register_contributor(&mut self, account_id: AccountId) -> bool {
+    /// Oracle-only. Adds metered units for company work; registers the contributor on first
+    /// report. Never changes any claimable balance.
+    pub fn record_contribution(&mut self, account_id: AccountId, units: U128, reference: String) {
+        self.assert_live();
         self.assert_oracle();
-        if self.contributors.contains_key(&account_id) {
+        require!(units.0 > 0, "units must be positive");
+        require!(
+            units.0 <= MAX_UNITS_PER_REPORT,
+            "units exceed per-report cap"
+        );
+        require!(reference.len() <= MAX_REFERENCE_LEN, "reference too long");
+        if !self.contributors.contains_key(&account_id) {
+            require!(
+                self.contributor_ids.len() < MAX_CONTRIBUTORS,
+                "contributor limit reached"
+            );
+            self.contributors.insert(
+                account_id.clone(),
+                Contributor {
+                    units: 0,
+                    registered_at: env::block_timestamp(),
+                },
+            );
+            self.contributor_ids.push(account_id.clone());
+        }
+        let c = self.contributors.get_mut(&account_id).unwrap();
+        if c.units == 0 {
+            self.contributors_with_units += 1;
+        }
+        c.units += units.0;
+        let total = c.units;
+        self.total_units += units.0;
+        emit(
+            "record_contribution",
+            near_sdk::serde_json::json!({
+                "account_id": account_id, "units": units, "lifetime_units": U128(total),
+                "total_units": U128(self.total_units), "reference": reference,
+            }),
+        );
+    }
+
+    /// Idempotent report: identical retry is a no-op; conflicting replay is rejected.
+    pub fn record_contribution_once(
+        &mut self,
+        account_id: AccountId,
+        units: U128,
+        reference: String,
+    ) -> bool {
+        self.assert_live();
+        self.assert_oracle();
+        require!(!reference.is_empty(), "report reference required");
+        if let Some((recorded_account, recorded_units)) = self.contribution_reports.get(&reference)
+        {
+            require!(
+                recorded_account == &account_id && *recorded_units == units.0,
+                "contribution reference conflict"
+            );
             return false;
         }
-        self.contributors.insert(
-            account_id.clone(),
-            Contributor {
-                units: 0,
-                acc_snapshot: self.acc_per_unit,
-                registered_at: env::block_timestamp(),
-            },
-        );
-        self.contributor_ids.push(account_id.clone());
-        emit("register_contributor", near_sdk::serde_json::json!({ "account_id": account_id }));
+        self.record_contribution(account_id.clone(), units, reference.clone());
+        self.contribution_reports
+            .insert(reference, (account_id, units.0));
         true
     }
 
-    // ---------------------------------------------------------------- jobs
-
-    /// Oracle-only. `price` = 0 marks an internal overhead job (CEO research, build, ...).
-    pub fn create_job(&mut self, job_id: String, price: U128) {
-        self.assert_oracle();
-        require!(!job_id.is_empty() && job_id.len() <= MAX_JOB_ID_LEN, "invalid job_id");
-        require!(!self.jobs.contains_key(&job_id), "job already exists");
-        self.jobs.insert(
-            job_id.clone(),
-            Job {
-                price: price.0,
-                status: JobStatus::Created,
-                payer: None,
-                created_at: env::block_timestamp(),
-                paid_at: 0,
-            },
-        );
-        self.job_count += 1;
-        emit("create_job", near_sdk::serde_json::json!({ "job_id": job_id, "price": price }));
+    pub fn has_contribution_reference(&self, reference: String) -> bool {
+        self.contribution_reports.contains_key(&reference)
     }
 
-    /// Customer escrows the job price. Any deposit above the price is refunded in the same call.
+    // ---------------------------------------------------------------- product sales (customer)
+
+    /// Customer buys the RAM HEIST pass. The price becomes revenue of the open period and the
+    /// pass is active for the caller at once. Any deposit above the price is returned.
+    /// No contributor balance changes here.
     #[payable]
-    pub fn pay(&mut self, job_id: String) {
+    pub fn buy_pass(&mut self) -> Pass {
+        self.assert_live();
         let deposit = env::attached_deposit().as_yoctonear();
-        let payer = env::predecessor_account_id();
-        let job = self.jobs.get_mut(&job_id).unwrap_or_else(|| env::panic_str("unknown job"));
-        require!(job.price > 0, "job has no price");
-        require!(job.status == JobStatus::Created, "job is not awaiting payment");
-        require!(deposit >= job.price, "deposit below job price");
-        let price = job.price;
-        job.status = JobStatus::Paid;
-        job.payer = Some(payer.clone());
-        job.paid_at = env::block_timestamp();
-        self.escrow_total += price;
-        emit(
-            "pay",
-            near_sdk::serde_json::json!({ "job_id": job_id, "payer": payer, "amount": U128(price) }),
-        );
+        let price = self.constraints.pass_price.0;
+        require!(deposit >= price, "deposit below pass price");
+        let buyer = env::predecessor_account_id();
+        let now = env::block_timestamp();
+        let period_id = self.current_period;
+
+        let period = self.periods.get_mut(&period_id).unwrap();
+        period.revenue.0 += price;
+
+        let pass = match self.passes.get_mut(&buyer) {
+            Some(p) => {
+                p.purchases += 1;
+                p.total_paid.0 += price;
+                p.last_paid_at = U64(now);
+                p.clone()
+            }
+            None => {
+                let p = Pass {
+                    account_id: buyer.clone(),
+                    purchases: 1,
+                    total_paid: U128(price),
+                    first_paid_at: U64(now),
+                    last_paid_at: U64(now),
+                };
+                self.passes.insert(buyer.clone(), p.clone());
+                p
+            }
+        };
+        let sale = Sale {
+            id: self.sales.len(),
+            account_id: buyer.clone(),
+            product: "ram-heist-pass".to_string(),
+            amount: U128(price),
+            period: period_id,
+            paid_at: U64(now),
+        };
+        emit("buy_pass", near_sdk::serde_json::to_value(&sale).unwrap());
+        self.sales.push(sale);
+
         let excess = deposit - price;
         if excess > 0 {
-            self.push_payout(payer, excess);
+            self.push_refund(buyer, excess);
         }
+        pass
     }
 
-    /// Oracle-only. Writes the receipt, adds units to lifetime totals and splits the escrow.
-    pub fn settle(&mut self, job_id: String, usages: Vec<(AccountId, U128)>) -> Receipt {
+    // ---------------------------------------------------------------- expenses (CEO + oracle)
+
+    /// CEO-agent only. Approves one operating cost inside the owner's per-period cap.
+    pub fn record_expense(
+        &mut self,
+        category: String,
+        amount: U128,
+        payee: AccountId,
+        reference: String,
+    ) -> u32 {
+        self.assert_live();
+        require!(
+            env::predecessor_account_id() == self.ceo,
+            "only the CEO can approve expenses"
+        );
+        require!(
+            EXPENSE_CATEGORIES.contains(&category.as_str()),
+            "unsupported expense category"
+        );
+        require!(amount.0 > 0, "amount must be positive");
+        require!(
+            !reference.is_empty() && reference.len() <= MAX_REFERENCE_LEN,
+            "reference required (max 200 chars)"
+        );
+        let cap = self.constraints.max_expense_per_period.0;
+        let period_id = self.current_period;
+        let period = self.periods.get_mut(&period_id).unwrap();
+        require!(
+            period.expenses_approved.0 + amount.0 <= cap,
+            "expense exceeds the owner's per-period cap"
+        );
+        let (_, selected) = self
+            .budget
+            .as_ref()
+            .unwrap_or_else(|| env::panic_str("no active Board budget"));
+        require!(
+            period.expenses_approved.0 + amount.0
+                <= parse_budget(selected).max_expense_per_period.0,
+            "expense exceeds active Board budget"
+        );
+        period.expenses_approved.0 += amount.0;
+        let id = self.expenses.len();
+        let expense = Expense {
+            id,
+            category,
+            amount,
+            period: period_id,
+            reference,
+            payee,
+            approver: env::predecessor_account_id(),
+            status: ExpenseStatus::Approved,
+            created_at: U64(env::block_timestamp()),
+            paid_at: U64(0),
+        };
+        emit(
+            "record_expense",
+            near_sdk::serde_json::to_value(&expense).unwrap(),
+        );
+        self.expenses.push(expense);
+        id
+    }
+
+    /// Oracle-only. Pays an approved expense from period revenue, then from the expense reserve.
+    pub fn pay_expense(&mut self, expense_id: u32) {
+        self.assert_live();
         self.assert_oracle();
-        require!(usages.len() <= MAX_USAGES_PER_SETTLE, "too many usage entries");
-        let (price, payer) = {
-            let job = self.jobs.get(&job_id).unwrap_or_else(|| env::panic_str("unknown job"));
-            match job.status {
-                JobStatus::Created => require!(job.price == 0, "job is not paid"),
-                JobStatus::Paid => {}
-                JobStatus::Settled => env::panic_str("job already settled"),
-                JobStatus::Refunded => env::panic_str("job was refunded"),
+        let period_id = self.current_period;
+        let reserve = self.expense_reserve;
+        let (payee, amount) = {
+            let e = self
+                .expenses
+                .get(expense_id)
+                .unwrap_or_else(|| env::panic_str("unknown expense"));
+            require!(
+                e.status == ExpenseStatus::Approved,
+                "expense is not awaiting payment"
+            );
+            (e.payee.clone(), e.amount.0)
+        };
+        let period = self.periods.get_mut(&period_id).unwrap();
+        require!(
+            period.operating_costs.0 + amount <= period.revenue.0 + reserve,
+            "insufficient operating funds"
+        );
+        period.operating_costs.0 += amount;
+        let e = self.expenses.get_mut(expense_id).unwrap();
+        e.status = ExpenseStatus::Paying;
+        e.period = period_id;
+        self.pending_expense_payments += 1;
+        emit(
+            "pay_expense",
+            near_sdk::serde_json::json!({
+                "expense_id": expense_id, "payee": payee, "amount": U128(amount), "period": period_id,
+            }),
+        );
+        Promise::new(payee)
+            .transfer(NearToken::from_yoctonear(amount))
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(CALLBACK_GAS)
+                    .on_expense_paid(expense_id, U128(amount), period_id),
+            )
+            .detach();
+    }
+
+    /// Never panics. On a failed transfer the expense returns to `Approved` and the cost is
+    /// reversed (or returned to the expense reserve if that period has closed meanwhile).
+    #[private]
+    pub fn on_expense_paid(&mut self, expense_id: u32, amount: U128, period_id: u64) -> bool {
+        // Ignore stale or mismatched callbacks; derive accounting from the stored payment.
+        let Some(e) = self.expenses.get_mut(expense_id) else {
+            return false;
+        };
+        if e.status != ExpenseStatus::Paying || e.amount != amount || e.period != period_id {
+            return false;
+        }
+        let ok = env::promise_results_count() == 1 && env::promise_result_checked(0, 64).is_ok();
+        e.status = if ok {
+            ExpenseStatus::Paid
+        } else {
+            ExpenseStatus::Approved
+        };
+        if ok {
+            e.paid_at = U64(env::block_timestamp());
+        }
+        self.pending_expense_payments -= 1;
+        if !ok {
+            // Close cannot run while a payment is in flight, so this period is still open.
+            let p = self.periods.get_mut(&period_id).unwrap();
+            p.operating_costs.0 -= amount.0;
+        }
+        emit(
+            if ok {
+                "expense_paid"
+            } else {
+                "expense_payment_failed"
+            },
+            near_sdk::serde_json::json!({ "expense_id": expense_id, "amount": amount, "period": period_id }),
+        );
+        ok
+    }
+
+    // ---------------------------------------------------------------- weekly close (oracle)
+
+    /// Oracle-only, once per period. Tops up the expense reserve, then credits positive net
+    /// profit to contributors pro rata by lifetime units at this moment. Units recorded later
+    /// cannot claim this period. Opens the next period.
+    pub fn close_distribution(&mut self, period_id: u64) -> PeriodReceipt {
+        self.assert_live();
+        self.assert_oracle();
+        require!(period_id <= self.current_period, "unknown period");
+        require!(period_id == self.current_period, "period already closed");
+        require!(
+            self.pending_expense_payments == 0,
+            "expense payments pending"
+        );
+        let now = env::block_timestamp();
+        let mut period = self.periods.get(&period_id).unwrap().clone();
+        let ended = now >= period.ends_at.0;
+        require!(ended || self.demo_mode, "period has not ended");
+
+        let math = compute_close(
+            period.revenue.0,
+            period.operating_costs.0,
+            self.constraints.expense_reserve_bps,
+        );
+        self.expense_reserve = self.expense_reserve + math.reserve_top_up - math.reserve_draw;
+
+        let carried_in = self.distribution_carry;
+        let net = math.period_net + carried_in;
+        let total_units = self.total_units;
+        let mut allocations: Vec<Allocation> = Vec::new();
+        let mut distributed: u128 = 0;
+        if net > 0 && total_units > 0 {
+            for i in 0..self.contributor_ids.len() {
+                let id = self.contributor_ids.get(i).unwrap().clone();
+                let units = self.contributors.get(&id).map(|c| c.units).unwrap_or(0);
+                if units == 0 {
+                    continue;
+                }
+                let amount = mul_div(net, units, total_units);
+                if amount > 0 {
+                    *self.claimable.entry(id.clone()).or_insert(0) += amount;
+                    distributed += amount;
+                }
+                allocations.push(Allocation {
+                    account_id: id,
+                    units: U128(units),
+                    amount: U128(amount),
+                });
             }
-            (job.price, job.payer.clone())
+        }
+        self.claimable_total += distributed;
+        // Rounding remainder, or the whole net when nobody holds units, rolls into the next close.
+        self.distribution_carry = net - distributed;
+
+        period.status = PeriodStatus::Closed;
+        period.expense_reserve_top_up = U128(math.reserve_top_up);
+        period.expense_reserve_draw = U128(math.reserve_draw);
+        period.carried_in = U128(carried_in);
+        period.net_distributable = U128(net);
+        period.distributed = U128(distributed);
+        period.total_units_at_close = U128(total_units);
+        period.closed_at = U64(now);
+        period.demo_close = !ended;
+        self.periods.insert(period_id, period.clone());
+        self.allocations.insert(period_id, allocations.clone());
+
+        let next = period_id + 1;
+        self.periods
+            .insert(next, new_period(next, now, self.constraints.period_secs.0));
+        self.current_period = next;
+
+        let receipt = PeriodReceipt {
+            period,
+            allocations,
         };
-
-        let mut job_units: u128 = 0;
-        for (account_id, units) in usages.iter() {
-            require!(self.contributors.contains_key(account_id), "unregistered contributor");
-            require!(units.0 <= MAX_UNITS_PER_REPORT, "units exceed per-report cap");
-            job_units += units.0;
-        }
-        require!(price == 0 || job_units > 0, "paid job needs non-zero units");
-
-        // Units first, so this job's contributors share in this sale (pre-pool update order).
-        for (account_id, units) in usages.iter() {
-            self.add_units(account_id, units.0);
-        }
-
-        let split = compute_split(price, &self.split, self.total_units);
-        if split.contributor_pool > 0 {
-            let inc = U256::from(split.contributor_pool) * U256::from(ACC_SCALE)
-                / U256::from(self.total_units);
-            let acc = words_to_u256(self.acc_per_unit) + inc;
-            self.acc_per_unit = u256_to_words(acc);
-            self.overhead_outstanding += split.contributor_pool;
-        }
-
-        let job = self.jobs.get_mut(&job_id).unwrap();
-        job.status = JobStatus::Settled;
-        self.escrow_total -= price;
-
-        let receipt = Receipt {
-            job_id: job_id.clone(),
-            price: U128(price),
-            payer,
-            usages,
-            job_units: U128(job_units),
-            contributor_pool: U128(split.contributor_pool),
-            treasury_share: U128(split.treasury),
-            platform_share: U128(split.platform),
-            platform: self.platform.clone(),
-            total_units_after: U128(self.total_units),
-            settled_at: U64(env::block_timestamp()),
-        };
-        self.receipts.insert(job_id, receipt.clone());
-        emit("settle", near_sdk::serde_json::to_value(&receipt).unwrap());
-
-        if split.platform > 0 {
-            self.push_payout(self.platform.clone(), split.platform);
-        }
+        emit(
+            "close_distribution",
+            near_sdk::serde_json::to_value(&receipt).unwrap(),
+        );
         receipt
     }
 
-    /// Stored payer only, after the refund timeout, while the job is still Paid.
-    pub fn refund(&mut self, job_id: String) {
+    /// Pays out the caller's claimable balance from closed periods. Works while paused.
+    pub fn withdraw_distribution(&mut self) -> U128 {
         let caller = env::predecessor_account_id();
-        let job = self.jobs.get_mut(&job_id).unwrap_or_else(|| env::panic_str("unknown job"));
-        require!(job.status == JobStatus::Paid, "job is not refundable");
-        require!(job.payer.as_ref() == Some(&caller), "only the payer can refund");
-        require!(
-            env::block_timestamp() >= job.paid_at + self.refund_timeout_ns,
-            "refund timeout not reached"
-        );
-        job.status = JobStatus::Refunded;
-        let price = job.price;
-        self.escrow_total -= price;
-        emit(
-            "refund",
-            near_sdk::serde_json::json!({ "job_id": job_id, "payer": caller, "amount": U128(price) }),
-        );
-        self.push_payout(caller, price);
-    }
-
-    /// Pays out the caller's claimable balance (failed payouts + contributor-pool share).
-    pub fn withdraw(&mut self) -> U128 {
-        let caller = env::predecessor_account_id();
-        if self.contributors.contains_key(&caller) {
-            self.checkpoint(&caller);
-        }
         let amount = self.claimable.remove(&caller).unwrap_or(0);
         require!(amount > 0, "nothing to withdraw");
         self.claimable_total -= amount;
         emit(
-            "withdraw",
+            "withdraw_distribution",
             near_sdk::serde_json::json!({ "account_id": caller, "amount": U128(amount) }),
         );
         self.push_payout(caller, amount);
         U128(amount)
     }
 
-    /// Callback for every outgoing transfer. Never panics: on failure the amount is credited to
-    /// the account's claimable balance (the transfer's refund returns the funds to this contract).
+    /// Callback for contributor withdrawals only. Never panics: on failure the amount is
+    /// credited back to the account's claimable balance.
     #[private]
     pub fn on_payout(&mut self, account_id: AccountId, amount: U128) -> bool {
         let ok = env::promise_results_count() == 1 && env::promise_result_checked(0, 64).is_ok();
@@ -536,7 +898,39 @@ impl Contract {
         ok
     }
 
-    // ---------------------------------------------------------------- governance
+    pub fn get_refund(&self, account_id: AccountId) -> U128 {
+        U128(self.refunds.get(&account_id).copied().unwrap_or(0))
+    }
+
+    /// Retry a failed excess-payment return. This never touches contributor claimable.
+    pub fn withdraw_refund(&mut self) -> U128 {
+        let caller = env::predecessor_account_id();
+        let amount = self.refunds.remove(&caller).unwrap_or(0);
+        require!(amount > 0, "no refund to withdraw");
+        self.refund_total -= amount;
+        emit(
+            "withdraw_refund",
+            near_sdk::serde_json::json!({ "account_id": caller, "amount": U128(amount) }),
+        );
+        self.push_refund(caller, amount);
+        U128(amount)
+    }
+
+    #[private]
+    pub fn on_refund(&mut self, account_id: AccountId, amount: U128) -> bool {
+        let ok = env::promise_results_count() == 1 && env::promise_result_checked(0, 64).is_ok();
+        if !ok {
+            *self.refunds.entry(account_id.clone()).or_insert(0) += amount.0;
+            self.refund_total += amount.0;
+        }
+        emit(
+            if ok { "refund_paid" } else { "refund_failed" },
+            near_sdk::serde_json::json!({ "account_id": account_id, "amount": amount }),
+        );
+        ok
+    }
+
+    // ---------------------------------------------------------------- governance (Board)
 
     /// CEO agent account only.
     pub fn create_proposal(
@@ -546,15 +940,34 @@ impl Contract {
         options: Vec<String>,
         voting_period_secs: U64,
     ) -> u64 {
-        require!(env::predecessor_account_id() == self.ceo, "only the CEO can propose");
-        require!(PROPOSAL_KINDS.contains(&kind.as_str()), "unsupported proposal kind");
-        require!(title.len() <= MAX_TITLE_LEN, "title too long");
-        require!(options.len() >= 2 && options.len() <= MAX_OPTIONS, "need 2-6 options");
+        self.assert_live();
         require!(
-            options.iter().all(|o| !o.is_empty() && o.len() <= MAX_OPTION_LEN),
+            env::predecessor_account_id() == self.ceo,
+            "only the CEO can propose"
+        );
+        require!(
+            PROPOSAL_KINDS.contains(&kind.as_str()),
+            "unsupported proposal kind"
+        );
+        require!(title.len() <= MAX_TITLE_LEN, "title too long");
+        require!(
+            options.len() >= 2 && options.len() <= MAX_OPTIONS,
+            "need 2-6 options"
+        );
+        require!(
+            options
+                .iter()
+                .all(|o| !o.is_empty() && o.len() <= MAX_OPTION_LEN),
             "invalid option"
         );
         require!(voting_period_secs.0 > 0, "voting period must be positive");
+        require!(
+            voting_period_secs.0 <= (u64::MAX - env::block_timestamp()) / NS,
+            "voting duration overflows timestamp"
+        );
+        for option in &options {
+            parse_budget(option);
+        }
         let id = self.next_proposal_id;
         self.next_proposal_id += 1;
         let now = env::block_timestamp();
@@ -567,15 +980,18 @@ impl Contract {
             voters: 0,
             proposer: env::predecessor_account_id(),
             created_at: U64(now),
-            ends_at: U64(now + voting_period_secs.0 * 1_000_000_000),
+            ends_at: U64(now + voting_period_secs.0 * NS),
             status: ProposalStatus::Open,
         };
-        emit("create_proposal", near_sdk::serde_json::to_value(&proposal).unwrap());
+        emit(
+            "create_proposal",
+            near_sdk::serde_json::to_value(&proposal).unwrap(),
+        );
         self.proposals.insert(id, proposal);
         id
     }
 
-    /// Weight = caller's lifetime units now (D6). Re-voting replaces the vote and re-reads weight.
+    /// Board vote. Weight = caller's lifetime units now. Re-voting replaces the earlier vote.
     pub fn vote(&mut self, proposal_id: u64, option: u32) {
         let voter = env::predecessor_account_id();
         let weight = self.contributors.get(&voter).map(|c| c.units).unwrap_or(0);
@@ -586,8 +1002,14 @@ impl Contract {
             .proposals
             .get_mut(&proposal_id)
             .unwrap_or_else(|| env::panic_str("unknown proposal"));
-        require!(proposal.status == ProposalStatus::Open, "proposal is closed");
-        require!(env::block_timestamp() < proposal.ends_at.0, "voting period ended");
+        require!(
+            proposal.status == ProposalStatus::Open,
+            "proposal is closed"
+        );
+        require!(
+            env::block_timestamp() < proposal.ends_at.0,
+            "voting period ended"
+        );
         require!((option as usize) < proposal.options.len(), "invalid option");
         match previous {
             Some(prev) => {
@@ -597,7 +1019,13 @@ impl Contract {
             None => proposal.voters += 1,
         }
         proposal.tallies[option as usize].0 += weight;
-        self.votes.insert(key, Vote { option, weight: U128(weight) });
+        self.votes.insert(
+            key,
+            Vote {
+                option,
+                weight: U128(weight),
+            },
+        );
         emit(
             "vote",
             near_sdk::serde_json::json!({
@@ -614,7 +1042,10 @@ impl Contract {
             .proposals
             .get_mut(&proposal_id)
             .unwrap_or_else(|| env::panic_str("unknown proposal"));
-        require!(proposal.status == ProposalStatus::Open, "proposal is closed");
+        require!(
+            proposal.status == ProposalStatus::Open,
+            "proposal is closed"
+        );
         let all_voted = proposal.voters > 0 && proposal.voters >= with_units;
         require!(
             all_voted || env::block_timestamp() >= proposal.ends_at.0,
@@ -631,7 +1062,9 @@ impl Contract {
         proposal.status = if max == 0 || winners.len() != 1 {
             ProposalStatus::NoChange
         } else {
-            ProposalStatus::Passed { option: winners[0] as u32 }
+            ProposalStatus::Passed {
+                option: winners[0] as u32,
+            }
         };
         let status = proposal.status.clone();
         if let ProposalStatus::Passed { option } = status {
@@ -651,16 +1084,27 @@ impl Contract {
             owner: self.owner.clone(),
             oracle: self.oracle.clone(),
             ceo: self.ceo.clone(),
-            platform: self.platform.clone(),
-            split: self.split,
-            refund_timeout_secs: U64(self.refund_timeout_ns / 1_000_000_000),
+            constraints: self.constraints.clone(),
+            paused: self.paused,
+            demo_mode: self.demo_mode,
             max_units_per_report: U128(MAX_UNITS_PER_REPORT),
         }
     }
 
-    /// Derived treasury (D5/D24): balance − storage stake − escrow − claimable − outstanding.
-    pub fn get_treasury(&self) -> U128 {
-        U128(self.treasury())
+    pub fn get_treasury(&self) -> Treasury {
+        let p = self.periods.get(&self.current_period).unwrap();
+        Treasury {
+            period_id: p.id,
+            period_revenue: p.revenue,
+            period_costs: p.operating_costs,
+            expense_reserve: U128(self.expense_reserve),
+            distribution_reserve: U128(self.claimable_total + self.distribution_carry),
+            claimable_total: U128(self.claimable_total),
+            distribution_carry: U128(self.distribution_carry),
+            account_balance: U128(env::account_balance().as_yoctonear()),
+            refund_total: U128(self.refund_total),
+            pending_expense_payments: self.pending_expense_payments,
+        }
     }
 
     pub fn get_stats(&self) -> Stats {
@@ -668,56 +1112,99 @@ impl Contract {
             contributors: self.contributor_ids.len(),
             contributors_with_units: self.contributors_with_units,
             total_units: U128(self.total_units),
-            escrow_total: U128(self.escrow_total),
-            claimable_total: U128(self.claimable_total),
-            overhead_outstanding: U128(self.overhead_outstanding),
-            acc_per_unit: words_to_u256(self.acc_per_unit).to_string(),
-            storage_usage: U64(env::storage_usage()),
-            storage_byte_cost: U128(env::storage_byte_cost().as_yoctonear()),
-            account_balance: U128(env::account_balance().as_yoctonear()),
-            treasury: U128(self.treasury()),
-            jobs: self.job_count,
+            sales: self.sales.len(),
+            expenses: self.expenses.len(),
+            periods: self.current_period + 1,
             proposals: self.next_proposal_id,
         }
     }
 
-    pub fn get_job(&self, job_id: String) -> Option<JobView> {
-        self.jobs.get(&job_id).map(|j| JobView {
-            job_id: job_id.clone(),
-            price: U128(j.price),
-            status: j.status,
-            payer: j.payer.clone(),
-            created_at: U64(j.created_at),
-            paid_at: U64(j.paid_at),
-            refundable_at: (j.status == JobStatus::Paid)
-                .then(|| U64(j.paid_at + self.refund_timeout_ns)),
+    /// `None` means the pass is locked for this account.
+    pub fn get_pass(&self, account_id: AccountId) -> Option<Pass> {
+        self.passes.get(&account_id).cloned()
+    }
+
+    pub fn has_pass(&self, account_id: AccountId) -> bool {
+        self.passes.contains_key(&account_id)
+    }
+
+    pub fn get_sales(&self, from_index: Option<u32>, limit: Option<u32>) -> Vec<Sale> {
+        let from = from_index.unwrap_or(0);
+        let limit = limit.unwrap_or(50).min(100);
+        (from..self.sales.len().min(from.saturating_add(limit)))
+            .filter_map(|i| self.sales.get(i).cloned())
+            .collect()
+    }
+
+    pub fn get_expense(&self, expense_id: u32) -> Option<Expense> {
+        self.expenses.get(expense_id).cloned()
+    }
+
+    pub fn get_expenses(&self, from_index: Option<u32>, limit: Option<u32>) -> Vec<Expense> {
+        let from = from_index.unwrap_or(0);
+        let limit = limit.unwrap_or(50).min(100);
+        (from..self.expenses.len().min(from.saturating_add(limit)))
+            .filter_map(|i| self.expenses.get(i).cloned())
+            .collect()
+    }
+
+    pub fn get_current_period(&self) -> Period {
+        self.periods.get(&self.current_period).unwrap().clone()
+    }
+
+    pub fn get_period(&self, period_id: u64) -> Option<Period> {
+        self.periods.get(&period_id).cloned()
+    }
+
+    pub fn get_periods(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<Period> {
+        let from = from_index.unwrap_or(0);
+        let limit = limit.unwrap_or(50).min(100);
+        (from..(self.current_period + 1).min(from.saturating_add(limit)))
+            .filter_map(|i| self.periods.get(&i).cloned())
+            .collect()
+    }
+
+    /// Closed-period receipt: ledger plus the unit snapshot and each contributor's allocation.
+    pub fn get_period_receipt(&self, period_id: u64) -> Option<PeriodReceipt> {
+        let period = self.periods.get(&period_id)?.clone();
+        if period.status != PeriodStatus::Closed {
+            return None;
+        }
+        Some(PeriodReceipt {
+            period,
+            allocations: self
+                .allocations
+                .get(&period_id)
+                .cloned()
+                .unwrap_or_default(),
         })
     }
 
-    pub fn get_receipt(&self, job_id: String) -> Option<Receipt> {
-        self.receipts.get(&job_id).cloned()
-    }
-
     pub fn get_contributor(&self, account_id: AccountId) -> Option<ContributorView> {
-        self.contributors.get(&account_id).map(|c| self.contributor_view(&account_id, c))
+        self.contributors
+            .get(&account_id)
+            .map(|c| self.contributor_view(&account_id, c))
     }
 
-    pub fn get_contributors(&self, from_index: Option<u32>, limit: Option<u32>) -> Vec<ContributorView> {
+    pub fn get_contributors(
+        &self,
+        from_index: Option<u32>,
+        limit: Option<u32>,
+    ) -> Vec<ContributorView> {
         let from = from_index.unwrap_or(0);
         let limit = limit.unwrap_or(50).min(100);
         (from..self.contributor_ids.len().min(from.saturating_add(limit)))
             .filter_map(|i| {
                 let id = self.contributor_ids.get(i)?;
-                self.contributors.get(id).map(|c| self.contributor_view(id, c))
+                self.contributors
+                    .get(id)
+                    .map(|c| self.contributor_view(id, c))
             })
             .collect()
     }
 
-    /// Claimable for any account (contributor or not), including un-checkpointed overhead share.
     pub fn get_claimable(&self, account_id: AccountId) -> U128 {
-        let base = self.claimable.get(&account_id).copied().unwrap_or(0);
-        let pending = self.contributors.get(&account_id).map(|c| self.pending(c)).unwrap_or(0);
-        U128(base + pending)
+        U128(self.claimable.get(&account_id).copied().unwrap_or(0))
     }
 
     pub fn get_proposal(&self, proposal_id: u64) -> Option<Proposal> {
@@ -737,7 +1224,11 @@ impl Contract {
     }
 
     pub fn get_budget(&self) -> Option<Budget> {
-        self.budget.as_ref().map(|(id, o)| Budget { proposal_id: *id, option: o.clone() })
+        self.budget.as_ref().map(|(id, o)| Budget {
+            proposal_id: *id,
+            option: o.clone(),
+            max_expense_per_period: parse_budget(o).max_expense_per_period,
+        })
     }
 }
 
@@ -750,70 +1241,36 @@ impl Contract {
         require!(env::predecessor_account_id() == self.oracle, "oracle only");
     }
 
-    fn treasury(&self) -> u128 {
-        let storage = env::storage_usage() as u128 * env::storage_byte_cost().as_yoctonear();
-        env::account_balance()
-            .as_yoctonear()
-            .saturating_sub(storage)
-            .saturating_sub(self.escrow_total)
-            .saturating_sub(self.claimable_total)
-            .saturating_sub(self.overhead_outstanding)
-    }
-
-    fn pending(&self, c: &Contributor) -> u128 {
-        let delta = words_to_u256(self.acc_per_unit) - words_to_u256(c.acc_snapshot);
-        let v = U256::from(c.units)
-            .checked_mul(delta)
-            .unwrap_or_else(|| env::panic_str("pending overflow"))
-            / U256::from(ACC_SCALE);
-        require!(v <= U256::from(u128::MAX), "pending overflow");
-        v.as_u128()
-    }
-
-    /// Moves the contributor's accrued overhead share from outstanding into claimable.
-    fn checkpoint(&mut self, account_id: &AccountId) {
-        let acc = self.acc_per_unit;
-        let pending = {
-            let c = self.contributors.get(account_id).unwrap();
-            self.pending(c)
-        };
-        self.contributors.get_mut(account_id).unwrap().acc_snapshot = acc;
-        if pending > 0 {
-            self.overhead_outstanding -= pending;
-            *self.claimable.entry(account_id.clone()).or_insert(0) += pending;
-            self.claimable_total += pending;
-        }
-    }
-
-    fn add_units(&mut self, account_id: &AccountId, units: u128) {
-        if units == 0 {
-            return;
-        }
-        self.checkpoint(account_id);
-        let c = self.contributors.get_mut(account_id).unwrap();
-        if c.units == 0 {
-            self.contributors_with_units += 1;
-        }
-        c.units += units;
-        self.total_units += units;
+    fn assert_live(&self) {
+        require!(!self.paused, "paused by owner");
     }
 
     fn contributor_view(&self, account_id: &AccountId, c: &Contributor) -> ContributorView {
-        let base = self.claimable.get(account_id).copied().unwrap_or(0);
         ContributorView {
             account_id: account_id.clone(),
             units: U128(c.units),
-            claimable: U128(base + self.pending(c)),
+            claimable: U128(self.claimable.get(account_id).copied().unwrap_or(0)),
             share_bps: if self.total_units == 0 {
                 0
             } else {
-                mul_div(c.units, BPS_DENOM as u128, self.total_units) as u32
+                mul_div(c.units, BPS_DENOM, self.total_units) as u32
             },
             registered_at: U64(c.registered_at),
         }
     }
 
-    /// Liabilities are debited by the caller before this; a failure re-credits claimable.
+    fn push_refund(&self, to: AccountId, amount: u128) {
+        Promise::new(to.clone())
+            .transfer(NearToken::from_yoctonear(amount))
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(CALLBACK_GAS)
+                    .on_refund(to, U128(amount)),
+            )
+            .detach();
+    }
+
+    /// The liability is debited by the caller before this; a failure re-credits claimable.
     fn push_payout(&self, to: AccountId, amount: u128) {
         Promise::new(to.clone())
             .transfer(NearToken::from_yoctonear(amount))

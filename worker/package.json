@@ -2,14 +2,19 @@
   "name": "@agentcorp/worker",
   "version": "0.1.0",
   "type": "module",
-  "bin": { "agent-corp-worker": "./bin/agent-corp-worker" },
+  "bin": {
+    "agent-corp-worker": "./bin/agent-corp-worker"
+  },
   "scripts": {
     "test": "vitest run --project unit",
-    "eval": "vitest run --project eval"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@agentcorp/shared": "workspace:*",
     "@near-js/crypto": "^0.0.5"
   },
-  "devDependencies": { "vitest": "^3.0.0", "tsx": "^4.19.2" }
+  "devDependencies": {
+    "vitest": "^3.0.0",
+    "tsx": "^4.19.2"
+  }
 }

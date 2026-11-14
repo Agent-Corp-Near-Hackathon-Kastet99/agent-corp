@@ -1,0 +1,60 @@
+# Growth harness — owner policy. The growth agent can read this file, never change it.
+# Levels: L0 auto (no external effect) · L1 auto on our own channels, capped ·
+#         L2 human approves · HUMAN_TASK agent drafts, human performs · DENY never.
+# Unknown action kinds are DENIED.
+
+growth_paused: false          # kill switch: true = every growth action is denied
+
+cycle_budget_usd: 5           # hard cap per cycle (fal, Exa, LLM, ...)
+total_budget_usd: 10          # hard cap for the whole run
+postiz_calls_per_hour: 25     # Postiz docs conflict (30/h vs 90-100/h); stay under the lower
+
+# Board governance. The CEO proposes growth budget tiers on-chain; contributors vote weighted by units;
+# the winning tier becomes the per-cycle spend cap (never above the owner caps above). Fail-closed:
+# with no active Board budget, only the bootstrap allowance is available.
+board:
+  enabled: true
+  usd_per_near: 5               # OWNER assumption: testnet NEAR has no market price
+  growth_share_pct: 50          # share of the Board's per-period expense budget growth may use
+  bootstrap_cycle_usd: 1        # allowance before any Board budget exists, so the CEO can plan and ask
+  tiers_usd: [0, 1, 2, 5]       # options the Board chooses between (each must be <= cycle/total caps)
+  voting_period_secs: 3600
+
+max_posts_per_day:
+  bluesky: 4
+  telegram: 3
+  discord: 3
+
+levels:
+  llm.generate: L0
+  exa.search: L0
+  exa.contents: L0
+  fal.image: L0
+  fal.video: L0
+  posthog.read: L0
+  postiz.read: L0
+  postiz.upload: L0
+  postiz.create_post.draft: L0
+  postiz.create_post.schedule: L2
+  postiz.create_post.now: L2
+  bluesky.post: L1
+  telegram.post: L1
+  discord.post: L1
+  resend.send.optin: L1         # only recipients with a recorded opt-in
+  resend.send.other: DENY
+  instantly.create_campaign_paused: L0
+  instantly.launch_campaign: L2
+  email.cold: DENY              # Resend AUP; deliverability; legal
+  reddit.post: HUMAN_TASK       # agent drafts, human posts
+  board.propose: L1             # CEO creates an on-chain Budget proposal (no money moves; the Board decides)
+  board.finalize: L1            # permissionless on-chain call once voting is over
+  board.proposal: HUMAN_TASK    # fallback when there is no chain connection: a human requests the vote
+  clip.cut: L0
+  "chain.*": DENY               # growth agent has no chain write access
+
+content_rules:
+  require_disclosure: "AI-operated account"   # must appear in the profile/bio; checked by the publisher role
+  forbid_terms: [dividend, ownership, earn, returns, "profit share", investment, guaranteed, passive income]
+  testnet_label: "DEMO / testnet"             # required whenever text mentions buying a pass or a price
+  x_links: reply_only                         # X charges extra for URLs in posts; put links in a reply
+  forbid: [fabricated_metrics, fake_testimonials, impersonation, real_person_likeness]   # enforced by LLM critic in Phase 1

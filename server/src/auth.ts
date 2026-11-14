@@ -1,3 +1,4 @@
+import { ACCOUNT_RE, loginPayload } from "@agentcorp/shared";
 import { randomBytes, verify } from "node:crypto";
 
 export type Login = { account: string; publicKey: string; signature: string; nonce: string; recipient?: string };
@@ -8,11 +9,16 @@ export class Nep413Auth {
   private readonly challenges = new Map<string, Challenge>();
   constructor(private readonly rpc: AccessKeyRpc, private readonly now = () => Date.now(), private readonly verifySignature = defaultVerify) {}
   issue(): { nonce: string; recipient: "agentcorp" } {
+    for (const [nonce, challenge] of this.challenges) {
+      if (challenge.used || challenge.expiresAt <= this.now()) this.challenges.delete(nonce);
+    }
+    if (this.challenges.size >= 1000) throw new Error("too many login challenges");
     const nonce = randomBytes(32).toString("base64url");
     this.challenges.set(nonce, { expiresAt: this.now() + 5 * 60_000, used: false });
     return { nonce, recipient: "agentcorp" };
   }
   async verify(login: Login): Promise<void> {
+    if (!ACCOUNT_RE.test(login.account)) throw new Error("invalid account");
     if (login.recipient !== undefined && login.recipient !== "agentcorp") throw new Error("wrong recipient");
     const c = this.challenges.get(login.nonce);
     if (!c || c.used) throw new Error("nonce already used or unknown");
@@ -25,9 +31,9 @@ export class Nep413Auth {
   }
 }
 
-/** NEP-413 payload used by this service. Worker must sign exact UTF-8 bytes. */
+/** NEP-413 payload used by this service. Worker must sign exact tagged Borsh digest. */
 export function nep413Payload(login: Pick<Login, "account" | "nonce">): Buffer {
-  return Buffer.from(JSON.stringify({ message: `Sign in to agentcorp as ${login.account}`, nonce: login.nonce, recipient: "agentcorp" }), "utf8");
+  return loginPayload(login);
 }
 function defaultVerify(login: Login): boolean {
   try {

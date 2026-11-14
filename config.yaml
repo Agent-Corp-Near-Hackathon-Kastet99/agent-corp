@@ -1,0 +1,33 @@
+# Agent Corp — owner constraints.
+#
+# This file is the only thing the human owner edits. Agents (CEO, accounting oracle,
+# workers) operate inside these limits and cannot change them: the contract accepts
+# `set_constraints` and `set_paused` from the owner account only.
+#
+# Apply changes on-chain with:  pnpm constraints
+
+network: testnet
+
+# Kill switch. true = contract rejects sales and every agent action.
+# Contributors can still withdraw balances from already-closed periods.
+kill_switch: false
+
+# Minimum (and exact) price of one RAM HEIST pass, in NEAR.
+pass_price_near: "1"
+
+# Share of each period's revenue held back for future company expenses, percent.
+expense_reserve_pct: 10
+
+# Length of one distribution period, in days.
+period_days: 7
+
+# Maximum total of expenses the CEO agent may approve in one period, in NEAR.
+max_expense_per_period_near: "0.5"
+
+# Standing costs the CEO agent may procure. It approves each one at most once per
+# period, only after the period has revenue, and only inside the cap above.
+vendors:
+  - category: hosting
+    amount_near: "0.1"
+    payee: vendor            # key name in .keys/testnet.json, or a full account id
+    reference: "DEMO hosting invoice (testnet)"
