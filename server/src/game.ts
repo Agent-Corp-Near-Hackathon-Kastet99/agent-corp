@@ -1,8 +1,12 @@
 import { randomBytes } from "node:crypto";
-import { HOUSE_01 } from "./levels.js";
+import { FOUNDER_HOUSE, HOUSE_01 } from "./levels.js";
 import type { Store } from "./store.js";
 import { initial, step } from "../web/heist-core.js";
 import { startRealtime, tickRealtime, TICK_MS } from "../web/realtime-core.js";
+import { replay, summarize, TICK_RATE } from "../web/sneak-core.js";
+
+export const MAX_RUN_TICKS = TICK_RATE * 240;
+export const MAX_RUN_ENTRIES = 12_000;
 
 type Session = { account: string; state: ReturnType<typeof initial>; started: number; expires: number; realtime?: { updated: number; input: { direction: string | null; sprint: boolean } } };
 /** Server-owned demo sessions and authoritative game transitions. Sessions expire after 12 hours. */
@@ -25,6 +29,33 @@ export class GameSessions {
   }
   current(token: string) { const s = this.get(token); return { account: s.account, level: structuredClone(HOUSE_01), state: structuredClone(s.state), best: this.store.bestScore(s.account, HOUSE_01.id) ?? null }; }
   restart(token: string) { const s = this.get(token); s.state = initial(HOUSE_01); s.started = this.now(); delete s.realtime; return this.current(token); }
+  /** The 3D level and this account's best time. Only holders of a session (pass or demo) get it. */
+  level3d(token: string) {
+    const s = this.get(token);
+    return { account: s.account, level: structuredClone(FOUNDER_HOUSE), best: this.store.bestScore(s.account, FOUNDER_HOUSE.id) };
+  }
+  /**
+   * Verify a run played in the browser. The client sends only its input log; the server replays it on the
+   * shared simulation, so the result and time come from the server, never from the client.
+   */
+  submitRun(token: string, input: unknown) {
+    const s = this.get(token);
+    const log = (input as { log?: unknown } | null)?.log;
+    if (!Array.isArray(log) || log.length > MAX_RUN_ENTRIES) throw new Error("invalid run");
+    let last = 0;
+    const clean: Array<[number, number, number, number]> = [];
+    for (const entry of log) {
+      if (!Array.isArray(entry) || entry.length !== 4) throw new Error("invalid run");
+      const [tick, mx, my, run] = entry as number[];
+      if (![tick, mx, my, run].every(Number.isInteger) || tick! < last || tick! > MAX_RUN_TICKS || Math.abs(mx!) > 100 || Math.abs(my!) > 100 || (run !== 0 && run !== 1)) throw new Error("invalid run");
+      last = tick!;
+      clean.push([tick!, mx!, my!, run!]);
+    }
+    const state = replay(FOUNDER_HOUSE, clean, MAX_RUN_TICKS);
+    const result = summarize(FOUNDER_HOUSE, state);
+    if (result.status === "won") this.store.addScore({ account: s.account, level: FOUNDER_HOUSE.id, ms: result.ms, at: this.now() });
+    return { result, best: this.store.bestScore(s.account, FOUNDER_HOUSE.id) };
+  }
   move(token: string, input: unknown) {
     if (input && typeof input === "object" && !Array.isArray(input)) {
       const command = input as Record<string, unknown>;

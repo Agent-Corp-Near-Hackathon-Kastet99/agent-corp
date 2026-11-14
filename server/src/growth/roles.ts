@@ -88,7 +88,7 @@ export async function ceoDecide(e: Engine, snap: Snapshot): Promise<Directive> {
   const schema = `{"diagnosis": string (cite numbers), "stage": ${STAGES.map(s => `"${s}"`).join("|")}, "bet": {"hypothesis": string, "channel": one of ${JSON.stringify(brief.channels)}, "audience": string, "metric": one of ${JSON.stringify(brief.funnel)}, "target": positive number, "hours": 1-168}, "assets": subset of ${JSON.stringify(ASSET_KINDS)}, "budget_usd": number <= ${policy.cycle_budget_usd}}`;
   return ask(e, snap.cycle, "ceo.directive", {
     system: CEO_SYSTEM,
-    prompt: `Company brief:\n${JSON.stringify({ product: brief.product, icp: brief.icp, channels: brief.channels, funnel: brief.funnel, constraints: brief.constraints }, null, 1)}\n\nSnapshot:\n${JSON.stringify(snap, null, 1)}\n\nRespond with JSON: ${schema}`,
+    prompt: `Company brief:\n${JSON.stringify({ product: brief.product, icp: brief.icp, channels: brief.channels, funnel: brief.funnel, constraints: brief.constraints, verifiedFacts: brief.facts }, null, 1)}\n\nSnapshot:\n${JSON.stringify(snap, null, 1)}\n\nRespond with JSON: ${schema}`,
     validate: v => validateDirective(v, ctx),
     dry: () => dryDirective(brief, snap, policy.cycle_budget_usd, snap.cycle),
   });
@@ -152,7 +152,7 @@ export async function writeCopy(e: Engine, d: Directive, targets: Target[]): Pro
   const brief = e.d.loadBrief(), policy = e.d.loadPolicy();
   const limits = Object.fromEntries(brief.channels.map(c => [c, COPY_LIMIT[c] ?? 600]));
   return ask(e, d.cycle, "copywriter", {
-    system: `You are the copy chief. Voice: ${brief.voice.tone}. Avoid: ${brief.voice.avoid.join(", ")}. Never use these terms: ${policy.content_rules.forbid_terms.join(", ")}. Never write URLs; write the token {{LINK}} where the link belongs (omit it for channel "x", where the link goes in a reply). Never invent statistics, testimonials or quotes. The product is a DEMO on testnet.`,
+    system: `You are the copy chief. Voice: ${brief.voice.tone}. Avoid: ${brief.voice.avoid.join(", ")}. Never use these terms: ${policy.content_rules.forbid_terms.join(", ")}. Never write URLs; write the token {{LINK}} where the link belongs (omit it for channel "x", where the link goes in a reply). Never invent statistics, testimonials or quotes. The product is a DEMO on testnet. You may state ONLY these verified product facts, and no other claim about gameplay, numbers, durations, clips, videos or features: ${JSON.stringify(brief.facts)}. If a fact is not listed, leave it out.`,
     prompt: `Bet: ${JSON.stringify(d.bet)}\nProduct: ${JSON.stringify(brief.product)}\nAudience pains: ${brief.icp.pains.join("; ")}\nKnown communities (context only): ${JSON.stringify(targets.slice(0, 5).map(t => t.name))}\nMax characters of body text per channel (excluding link): ${JSON.stringify(limits)}\nFor "reddit": first line is the post title, then a blank line, then the body, written as honest feedback-seeking, not an ad.\nReturn JSON {"variants": [{"channel": string, "text": string, "reply": optional string (only for "x", a short lead-in like "Play House 01:")}]} with one variant per channel in ${JSON.stringify(brief.channels)}.`,
     validate: v => {
       const list = isObject(v) && Array.isArray(v.variants) ? v.variants : [];

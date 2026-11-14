@@ -34,6 +34,7 @@ const body = (c: Call) => JSON.parse(String(c.init.body));
 describe("env + http", () => {
   it("parses dotenv, process env wins, only known keys, dry-run default on", () => {
     expect(parseDotenv("# c\nA=1\nexport B='two words'\nC=\"x\" \nD=v # trailing\nbad line")).toEqual({ A: "1", B: "two words", C: "x", D: "v" });
+    expect(parseDotenv("T=      # only a comment\nU=#hash-start")).toEqual({ T: "", U: "" });
     const dir = mkdtempSync(join(tmpdir(), "env-")); const file = join(dir, ".env.growth");
     writeFileSync(file, "FAL_KEY=file\nEXA_API_KEY=file\nRANDOM_SECRET=nope\n");
     const env = loadGrowthEnv({ FAL_KEY: "proc" } as NodeJS.ProcessEnv, file);
@@ -75,7 +76,7 @@ describe("postiz", () => {
     expect(r.postId).toBe("p9");
     const b = body(m.calls[2]!);
     expect(b).toMatchObject({ type: "now", shortLink: false, tags: [] });
-    expect(b.posts[0]).toMatchObject({ integration: { id: "i1" }, settings: { __type: "x" } });
+    expect(b.posts[0]).toMatchObject({ integration: { id: "i1" }, settings: { __type: "x", who_can_reply_post: "everyone" } });
     expect(b.posts[0].value[0].image).toEqual([{ id: "m1", path: "https://cdn/x.png" }]);
     expect(b.posts[0].value[1].image).toEqual([]);
     expect(await p.postAnalytics("p 9", 7)).toEqual([{ label: "Impressions", total: 15 }]);

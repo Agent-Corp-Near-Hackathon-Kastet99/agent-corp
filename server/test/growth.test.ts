@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { ROOT } from "../src/config.js";
-import { validatePolicy, loadPolicy, levelFor, type GrowthPolicy } from "../src/growth/policy.js";
+import { validatePolicy, loadPolicy, loadOwnerPolicy, levelFor, type GrowthPolicy } from "../src/growth/policy.js";
 import { validateBrief, loadBrief, hasPlaceholderUrl } from "../src/growth/brief.js";
 import { contentLint } from "../src/growth/lint.js";
 import { decide } from "../src/growth/gate.js";
@@ -34,6 +34,9 @@ describe("growth config files", () => {
     expect(() => validateBrief({ ...base, product: { ...base.product, url: "ftp://x" } })).toThrow("http(s)");
     expect(() => validateBrief({ ...base, product: { ...base.product, url: "nope" } })).toThrow("valid URL");
     expect(() => validateBrief({ ...base, channels: [] })).toThrow("channels");
+    expect(validateBrief({ ...base, facts: undefined }).facts).toEqual([]);
+    expect(validateBrief({ ...base, facts: ["a verified fact"] }).facts).toEqual(["a verified fact"]);
+    expect(() => validateBrief({ ...base, facts: [] })).toThrow("facts");
   });
   it("levelFor prefers exact over wildcard and longest wildcard", () => {
     const p = policy({ levels: { "chain.*": "DENY", "chain.view": "L0", "a.*": "L2", "a.b.*": "L1" } });
@@ -221,3 +224,23 @@ describe("GrowthState", () => {
 
 import { createRequire } from "node:module";
 const require_ = createRequire(import.meta.url);
+
+describe("owner policy override", () => {
+  it("applies only local level overrides on top of the shipped policy", async () => {
+    const { mkdtempSync, writeFileSync, rmSync, copyFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "policy-"));
+    try {
+      const shipped = (await import("node:url")).fileURLToPath(new URL("../../growth/policy.yaml", import.meta.url));
+      const local = join(dir, "policy.local.yaml");
+      expect(loadOwnerPolicy(shipped, local).levels["bluesky.post"]).toBe("L1");
+      writeFileSync(local, "levels:\n  bluesky.post: DENY\n  postiz.create_post.now: L2\n");
+      const p = loadOwnerPolicy(shipped, local);
+      expect(p.levels["bluesky.post"]).toBe("DENY");
+      expect(p.levels["telegram.post"]).toBe("L1");
+      writeFileSync(local, "levels:\n  bluesky.post: ALWAYS\n");
+      expect(() => loadOwnerPolicy(shipped, local)).toThrow("unknown level");
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+});

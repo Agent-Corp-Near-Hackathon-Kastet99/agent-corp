@@ -19,3 +19,11 @@ visual:
 constraints:
   legal: "no dividend, ownership or returns language"
   label: "DEMO / testnet"
+
+# Owner-verified facts. The copywriter may only use these (code: server/src/levels.ts, 2026-11-14).
+facts:
+  - "RAM HEIST is a free 2D top-down stealth-puzzle that runs in the browser."
+  - "House 01 has two patrolling guards, The Founder and The Roommate, plus doors, a flowerpot you can use as a distraction, and RAM to steal."
+  - "There is a time medal for finishing House 01 under 45 seconds."
+  - "It is a testnet DEMO: passes cost test tokens, no real money."
+  - "There is no video, no clip, no player count and no leaderboard to mention."

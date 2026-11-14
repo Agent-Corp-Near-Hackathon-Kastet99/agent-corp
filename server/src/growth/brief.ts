@@ -11,6 +11,8 @@ export type Brief = {
   voice: { tone: string; avoid: string[] };
   visual: { style: string; palette: string };
   constraints: { legal: string; label: string };
+  /** Owner-verified statements. Copy may use only these facts; anything else numeric or about the product is forbidden. */
+  facts: string[];
 };
 
 const fail = (msg: string): never => { throw new Error(`growth/brief.yaml: ${msg}`); };
@@ -47,6 +49,7 @@ export function validateBrief(value: unknown): Brief {
     voice: { tone: text(voice.tone, "voice.tone"), avoid: voice.avoid === undefined ? [] : list(voice.avoid, "voice.avoid") },
     visual: { style: text(visual.style, "visual.style"), palette: text(visual.palette, "visual.palette") },
     constraints: { legal: text(constraints.legal, "constraints.legal"), label: text(constraints.label, "constraints.label") },
+    facts: value.facts === undefined ? [] : list(value.facts, "facts"),
   };
 }
 

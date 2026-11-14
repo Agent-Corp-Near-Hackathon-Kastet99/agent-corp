@@ -26,6 +26,7 @@ artifacts/
 .vercel/
 worker/.smoke/
 server/web/wallet.js
+server/web/game3d.js
 bin/
 !worker/bin/
 !worker/bin/agent-corp-worker
@@ -43,3 +44,4 @@ bin/
 
 # Growth harness: keep the example file tracked, real values never
 !.env.growth.example
+growth/policy.local.yaml

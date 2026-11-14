@@ -10,6 +10,8 @@ Run `pnpm --filter @agentcorp/server exec tsx src/game-server.ts` on a persisten
 - `GAME_ORIGIN`: exact HTTPS origin of the Vercel game, without a path.
 - `HOST` and `PORT`: listener; defaults to loopback and port 8787. Use a TLS reverse proxy with a narrowly scoped route allowlist.
 
+The 3D game (`/game`) is played entirely in the browser; the backend serves the pass-gated level (`GET /api/game/levels/founder-house`) and verifies a finished run (`POST /api/game/run`) by replaying the submitted input log on the shared simulation, so time and result come from the server. The older tile endpoints (`/api/game/step`, `/api/game/levels/house-01`) are still served for the legacy engine and tests.
+
 The server allows game, checkout and required read-only endpoints only. Checkout permits one attempted purchase for the shared demo wallet. It creates the purchase marker before submitting a transaction, so even an uncertain RPC result cannot cause an automatic second payment. A failed or uncertain attempt requires an operator to inspect the chain before removing the marker. Existing passes prevent a new purchase. The deployed backend uses a shared demo wallet and shared score. Personal-wallet routes (`/api/player/*`) exist in the repository but are not part of the current deployment; there is no production payment support. The customer key is full access because buying a pass attaches a deposit; keep its balance low. Persistent storage is required for the purchase marker and scores. Sessions remain in memory and end on restart.
 
 ## Current deployment

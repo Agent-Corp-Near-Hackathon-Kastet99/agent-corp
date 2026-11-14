@@ -27,7 +27,7 @@ export function parseDotenv(text: string): Record<string, string> {
     if (!m) continue;
     let value = m[2]!.trim();
     if ((value.startsWith('"') && value.endsWith('"') && value.length >= 2) || (value.startsWith("'") && value.endsWith("'") && value.length >= 2)) value = value.slice(1, -1);
-    else value = value.replace(/\s+#.*$/, "");
+    else value = value.startsWith("#") ? "" : value.replace(/\s+#.*$/, "");
     out[m[1]!] = value;
   }
   return out;

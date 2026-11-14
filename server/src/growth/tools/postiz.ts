@@ -35,7 +35,7 @@ export function postiz(env: GrowthEnv, f: Fetch = fetch) {
         date: a.date ?? new Date().toISOString(),
         shortLink: false,
         tags: [],
-        posts: [{ integration: { id: a.integrationId }, value, settings: { __type: a.provider, ...(a.settings ?? {}) } }],
+        posts: [{ integration: { id: a.integrationId }, value, settings: { __type: a.provider, ...(a.provider === "x" ? { who_can_reply_post: "everyone" } : {}), ...(a.settings ?? {}) } }],
       };
       const r = await http<unknown>(f, `${base}/posts`, { method: "POST", headers: need(), json: body });
       const first = Array.isArray(r) ? r[0] : r;

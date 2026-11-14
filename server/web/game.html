@@ -1,12 +1,17 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RAM HEIST · The Founder’s House</title><link rel="stylesheet" href="/style.css"></head>
-<body class="game-page"><header id="header"></header><main class="game-main">
-  <div class="game-title"><div><span class="game-kicker">MISSION 01 <span>●</span> THE FOUNDER’S HOUSE</span><h1>RAM <em>HEIST</em></h1><p>One founder. Two sticks of RAM. Infinite runway.</p></div><span class="game-build">TESTNET<br><b>DEMO BUILD</b></span></div>
-  <div class="game-layout"><section class="play-area" aria-label="Game">
-    <div class="mission-bar"><span><b>01</b> THE LIVING ROOM UPGRADE</span><span>★ &nbsp; STEALTH MISSION</span></div>
-    <div class="game-wrap"><canvas id="game" width="960" height="620" aria-label="Top-down game board"></canvas><div class="game-hud" aria-hidden="true"><div class="hud-pill"><span class="hud-icon">▰</span><span>RAM <strong id="hud-loot">0 / 2</strong></span></div><div class="hud-pill hud-energy"><span class="hud-icon energy-icon">ϟ</span><span>SPRINT <span class="energy-track"><span id="hud-energy"></span></span></span></div></div><div class="game-alert" id="game-alert" aria-hidden="true">SPOTTED!</div></div>
-    <div class="game-bottom"><div><span class="control-label">MOVE</span><div class="controls game-controls" aria-label="Game controls"><button data-move="up" aria-label="Move up">↑</button><button data-move="left" aria-label="Move left">←</button><button data-move="down" aria-label="Move down">↓</button><button data-move="right" aria-label="Move right">→</button></div></div><div class="game-actions"><button id="sprint" class="sprint-button">⚡ <span>HOLD TO<br><b>SPRINT</b></span></button><button id="restart" class="restart-button">↻ <span>RESTART</span></button></div></div>
-    <p class="game-help">Arrow keys or WASD to move · Hold Shift to sprint · Touch and hold on mobile</p>
-  </section><aside class="mission-card"><span class="mission-stamp">YOUR BRIEF</span><h2>Operation:<br><em>More Memory</em></h2><p>The model won’t train itself. Slip inside, grab both RAM sticks, and make it out before the residents notice.</p><div class="mission-rule"></div><span class="status-label">MISSION STATUS</span><h3 id="state">Checking pass</h3><p id="message" role="status"></p><div class="tip"><b>FOUNDER TIP #01</b><br>Hide in the green cover. The best growth strategy is not getting caught.</div><div id="receipt"></div><a class="game-store-link" href="/store">NEED ACCESS? VISIT THE STORE →</a></aside></div>
-  <p class="game-disclaimer">Play with your own testnet wallet or the shared demo pass. Fictional house. Fictional founders. Very real memory shortage.</p>
-</main><script type="module" src="/game.js"></script></body></html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0e1830">
+<title>Alt-Ram Sam · The Founder’s House</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800&display=swap">
+<link rel="stylesheet" href="/game.css">
+</head>
+<body class="game3d">
+<canvas id="scene" aria-label="Alt-Ram Sam 3D stealth game"></canvas>
+<div id="touch-zone"></div>
+<div id="hud"></div>
+<noscript>Alt-Ram Sam needs JavaScript and WebGL.</noscript>
+<script type="module" src="/game3d.js"></script>
+</body></html>

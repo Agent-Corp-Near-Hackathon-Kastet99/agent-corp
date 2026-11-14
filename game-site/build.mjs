@@ -10,7 +10,7 @@ if (!backend || !/^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(backend)) throw new Er
 // The server must be reachable over HTTPS before this static site is deployed.
 await rm(out, { recursive: true, force: true });
 await mkdir(join(out, 'shared'), { recursive: true });
-for (const file of ['game.html', 'game.js', 'heist-core.js', 'store.html', 'store.js', 'style.css', 'chain.js', 'wallet.js']) await cp(join(root, 'server', 'web', file), join(out, file));
+for (const file of ['game.html', 'game3d.js', 'game.css', 'store.html', 'store.js', 'style.css', 'chain.js', 'wallet.js']) await cp(join(root, 'server', 'web', file), join(out, file));
 await cp(join(root, 'shared', 'src', 'money.js'), join(out, 'shared', 'money.js'));
 const chain = join(out, 'chain.js');
 await writeFile(chain, (await readFile(chain, 'utf8')).replace('${link("/", "Ledger", "ledger")}', '').replace('class="brand" href="/"', 'class="brand" href="/game"'));

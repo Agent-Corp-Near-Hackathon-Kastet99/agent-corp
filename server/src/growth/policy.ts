@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { ROOT } from "../config.js";
@@ -142,6 +142,17 @@ export function validatePolicy(value: unknown): GrowthPolicy {
 
 export function loadPolicy(file = join(ROOT, "growth", "policy.yaml")): GrowthPolicy {
   return validatePolicy(parse(readFileSync(file, "utf8")));
+}
+
+/** policy.yaml plus the optional gitignored growth/policy.local.yaml, whose `levels` entries override. */
+export function loadOwnerPolicy(file = join(ROOT, "growth", "policy.yaml"), local = join(ROOT, "growth", "policy.local.yaml")): GrowthPolicy {
+  const base = parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+  if (existsSync(local)) {
+    const extra = parse(readFileSync(local, "utf8")) as { levels?: Record<string, unknown> } | null;
+    if (extra?.levels !== undefined && !isObject(extra.levels)) fail("policy.local.yaml: levels must be a mapping");
+    base.levels = { ...(base.levels as Record<string, unknown>), ...(extra?.levels ?? {}) };
+  }
+  return validatePolicy(base);
 }
 
 /** Exact match wins; else the longest `prefix.*` wildcard; else undefined (caller denies). */

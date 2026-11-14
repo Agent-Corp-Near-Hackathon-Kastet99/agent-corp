@@ -10,7 +10,7 @@ import { EventStore } from "./events.js";
 import { AnthropicLlm, DryLlm, type Llm } from "./llm.js";
 import { GrowthLoop } from "./loop.js";
 import { OptInStore } from "./optin.js";
-import { loadPolicy } from "./policy.js";
+import { loadOwnerPolicy } from "./policy.js";
 import { handleGrowthRequest } from "./routes.js";
 import { GrowthState } from "./state.js";
 import { acquireGrowthLocks } from "./lock.js";
@@ -71,7 +71,7 @@ export function createGrowthRuntime(o: RuntimeOptions): GrowthRuntime {
     return { revenueYocto: t.period_revenue, passPriceYocto: c.constraints.pass_price };
   } : undefined;
 
-  const policyLoader = o.loadPolicy ?? loadPolicy;
+  const policyLoader = o.loadPolicy ?? loadOwnerPolicy;
   const board = new Board({ ledger: o.ledger, loadPolicy: policyLoader, now, log: o.log, canWrite: () => !dryRun || env.GROWTH_BOARD_WRITES === "on" });
   const engine = new Engine({ state, cycles, events, optin, tools, llm, env, dryRun, loadBrief: o.loadBrief ?? loadBrief, loadPolicy: policyLoader, readChain, board, log: o.log, now });
   const loop = new GrowthLoop(engine);

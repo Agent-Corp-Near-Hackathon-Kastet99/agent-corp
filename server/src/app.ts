@@ -53,9 +53,9 @@ function json(res: ServerResponse, code: number, body: unknown) {
   res.writeHead(code, { "content-type": "application/json", "cache-control": "no-store" });
   res.end(JSON.stringify(body));
 }
-async function body(req: IncomingMessage): Promise<Record<string, unknown>> {
+async function body(req: IncomingMessage, limit = 10_000): Promise<Record<string, unknown>> {
   let raw = "";
-  for await (const chunk of req) { raw += chunk; if (raw.length > 10_000) throw new Error("request too large"); }
+  for await (const chunk of req) { raw += chunk; if (raw.length > limit) throw new Error("request too large"); }
   return raw ? JSON.parse(raw) as Record<string, unknown> : {};
 }
 function need(): Ledger {
@@ -68,7 +68,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
   const method = req.method ?? "GET";
 
   const playerPaths = ["/api/player/challenge", "/api/player/verify", "/api/player/logout", "/api/player/me", "/api/player/session", "/api/player/checkout"];
-  if (options.gameOnly && !["/api/deployment", "/api/game/levels/house-01", "/api/game/step", "/api/demo/session", "/api/demo/buy", "/api/intents/quote", ...playerPaths].includes(path)) return json(res, 404, { error: "not found" });
+  if (options.gameOnly && !["/api/deployment", "/api/game/levels/house-01", "/api/game/levels/founder-house", "/api/game/run", "/api/game/step", "/api/demo/session", "/api/demo/buy", "/api/intents/quote", ...playerPaths].includes(path)) return json(res, 404, { error: "not found" });
 
   if (playerPaths.includes(path)) {
     const origin = options.gameOrigin ?? `http://${req.headers.host}`;
@@ -149,6 +149,18 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
     try { return json(res, 200, { id: "house-01", ...games.current(token) }); }
     catch { return json(res, 401, { error: "Open the demo pass to start a game session" }); }
   }
+  if (path === "/api/game/levels/founder-house" && method === "GET") {
+    const token = req.headers.cookie?.split("; ").find(c => c.startsWith("heist="))?.slice(6) ?? "";
+    try { return json(res, 200, games.level3d(token)); }
+    catch { return json(res, 401, { error: "Open the demo pass to start a game session" }); }
+  }
+  if (path === "/api/game/run" && method === "POST") {
+    if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}` && req.headers.origin !== `https://${req.headers.host}` && req.headers.origin !== options.gameOrigin) return json(res, 403, { error: "same origin required" });
+    if (!req.headers["content-type"]?.startsWith("application/json")) return json(res, 403, { error: "JSON required" });
+    const token = req.headers.cookie?.split("; ").find(c => c.startsWith("heist="))?.slice(6) ?? "";
+    try { return json(res, 200, games.submitRun(token, await body(req, 400_000))); }
+    catch (error) { return json(res, 400, { error: reason(error) }); }
+  }
   if (path === "/api/game/step" && method === "POST") {
     if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}` && req.headers.origin !== `https://${req.headers.host}` && req.headers.origin !== options.gameOrigin) return json(res, 403, { error: "same origin required" });
     if (!req.headers["content-type"]?.startsWith("application/json")) return json(res, 403, { error: "JSON required" });
@@ -176,7 +188,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
   if (method === "POST" && path === "/api/demo/seed-tasks") {
     const tasks = [
       { id: "demo-qa-house-01-v2", kind: "qa" as const, title: "House 01 QA", prompt: "Create a concise proposed QA checklist from this description only; do not claim to have played or inspected the game and do not request files. House 01 is a turn-based fictional stealth puzzle with keyboard and on-screen movement, two patrolling residents with vision cones, walls and closed doors blocking sight, a flowerpot distraction, two RAM collectibles, an exit that requires both collectibles, and detection that ends the run. Cover controls, accessibility, gameplay and edge cases.", status: "queued" as const },
-      { id: "demo-marketing-house-01", kind: "marketing" as const, title: "Trailer captions", prompt: "Draft original short trailer captions for RAM HEIST, a fictional stealth puzzle game. Do not claim unverified features.", status: "queued" as const },
+      { id: "demo-marketing-house-01", kind: "marketing" as const, title: "Trailer captions", prompt: "Draft original short trailer captions for Alt-Ram Sam, a fictional stealth puzzle game. Do not claim unverified features.", status: "queued" as const },
     ];
     for (const task of tasks) if (!store.tasks().some(t => t.id === task.id)) store.upsertTask(task);
     return json(res, 200, { tasks: store.tasks() });
@@ -198,7 +210,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
     const k = need();
     const chain = await k.view<ChainConfig>("get_config");
     const tx = await k.call("customer", "buy_pass", {}, { depositYocto: BigInt(chain.constraints.pass_price) });
-    store.log({ ts: Date.now(), actor: "CUSTOMER", text: `${k.accounts.customer} paid ${fmt(chain.constraints.pass_price)} NEAR for RAM HEIST Pass (DEMO wallet)`, txHash: tx.txHash, explorerUrl: tx.explorerUrl });
+    store.log({ ts: Date.now(), actor: "CUSTOMER", text: `${k.accounts.customer} paid ${fmt(chain.constraints.pass_price)} NEAR for Alt-Ram Sam Pass (DEMO wallet)`, txHash: tx.txHash, explorerUrl: tx.explorerUrl });
     return json(res, 201, { account: k.accounts.customer, txHash: tx.txHash, explorerUrl: tx.explorerUrl });
   }
   if (method === "POST" && path === "/api/demo/agents") {
