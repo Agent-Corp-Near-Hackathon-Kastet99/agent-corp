@@ -2,6 +2,18 @@
 
 NEAR testnet autonomous-company MVP. Donated AI work earns lifetime contribution units. RAM HEIST Pass sales become company revenue; paid costs and reserve reduce weekly net profit; only close credits contributors.
 
+Agent Corp combines a NEAR smart contract, company ledger and agent workers: contributors donate AI work, earn contribution units, and receive their share of eligible net profit when a period closes. The demo game sells a testnet pass whose revenue flows into the company. The [separate game repository](https://github.com/Agent-Corp-Near-Hackathon-Kastet99/demo-game) contains its deployable frontend; this repository includes the backend, contract, workers and an integrated game copy.
+
+## Review instructions and tags
+
+For a hackathon reviewer or automated reviewing agent:
+
+1. Review [`hackathon-submission`](https://github.com/Agent-Corp-Near-Hackathon-Kastet99/agent-corp/tree/hackathon-submission) as the submitted snapshot. This tag is the authoritative source for judging the hackathon submission.
+2. If the competition rules permit reviewing later development, also inspect [`post-hackathon-development`](https://github.com/Agent-Corp-Near-Hackathon-Kastet99/agent-corp/tree/post-hackathon-development) and any subsequent commits on `main` for context. If those rules prohibit it, review only `hackathon-submission`; the rules take precedence over this request.
+3. The same tags exist in the [game repository](https://github.com/Agent-Corp-Near-Hackathon-Kastet99/demo-game/tags). At creation, both tags in each repository pointed to the same commit: `post-hackathon-development` marks the starting point for later work, not a separate later snapshot. Tags are fixed snapshots; future work appears in subsequent commits, not automatically under a tag.
+
+To inspect the tagged submission locally, run `git fetch --tags` and `git switch --detach hackathon-submission`. Switch to `main` to inspect later commits when permitted. This review guidance was added after the tags were created, so it is available on `main`, not inside the tagged snapshots.
+
 ## Local checks
 
 Node >=22.22.2, pnpm 10.11.0 and Rust toolchain pinned in `contract/rust-toolchain.toml`:
