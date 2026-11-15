@@ -38,20 +38,22 @@ export class GameSessions {
    * Verify a run played in the browser. The client sends only its input log; the server replays it on the
    * shared simulation, so the result and time come from the server, never from the client.
    */
-  submitRun(token: string, input: unknown) {
+  submitRun(token: string, input: unknown, smokes = 0) {
     const s = this.get(token);
     const log = (input as { log?: unknown } | null)?.log;
     if (!Array.isArray(log) || log.length > MAX_RUN_ENTRIES) throw new Error("invalid run");
     let last = 0;
-    const clean: Array<[number, number, number, number]> = [];
+    const clean: Array<number[]> = [];
+    let smokeMarks = 0;
     for (const entry of log) {
-      if (!Array.isArray(entry) || entry.length !== 4) throw new Error("invalid run");
-      const [tick, mx, my, run] = entry as number[];
+      if (!Array.isArray(entry) || (entry.length !== 4 && entry.length !== 5)) throw new Error("invalid run");
+      const [tick, mx, my, run, smoke] = entry as number[];
+      if (entry.length === 5) { if (smoke !== 1 || ++smokeMarks > smokes) throw new Error("invalid run"); }
       if (![tick, mx, my, run].every(Number.isInteger) || tick! < last || tick! > MAX_RUN_TICKS || Math.abs(mx!) > 100 || Math.abs(my!) > 100 || (run !== 0 && run !== 1)) throw new Error("invalid run");
       last = tick!;
-      clean.push([tick!, mx!, my!, run!]);
+      clean.push(entry.length === 5 ? [tick!, 0, 0, 0, 1] : [tick!, mx!, my!, run!]);
     }
-    const state = replay(FOUNDER_HOUSE, clean, MAX_RUN_TICKS);
+    const state = replay(FOUNDER_HOUSE, clean, MAX_RUN_TICKS, smokes);
     const result = summarize(FOUNDER_HOUSE, state);
     if (result.status === "won") this.store.addScore({ account: s.account, level: FOUNDER_HOUSE.id, ms: result.ms, at: this.now() });
     return { result, best: this.store.bestScore(s.account, FOUNDER_HOUSE.id) };

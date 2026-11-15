@@ -142,13 +142,17 @@ export function sanitizeInput(input) {
   return { mx: q(input?.mx), my: q(input?.my), run: input?.run === true };
 }
 
-export function createState(level) {
+/** Smoke Grenade: once per run, after being caught, resume on the spot unseen and unheard for this long. */
+export const SMOKE_TIME = 3;
+
+export function createState(level, smokes = 0) {
   const c = compile(level);
   return {
     tick: 0,
     status: "playing", // playing | caught | won
     player: { x: level.start.x, y: level.start.y, fx: 0, fy: 1, moving: false, run: false, sprint: SPRINT_MAX },
     hidden: false,
+    smokes: smokes > 0 ? 1 : 0, smoke: 0,
     guards: level.guards.map(g => ({
       id: g.id, x: g.routes[0][0].x, y: g.routes[0][0].y, hx: g.face?.x ?? 0, hy: g.face?.y ?? 1,
       route: 0, next: 1 % g.routes[0].length, wait: g.routes[0][0].wait ?? 0, lookAt: g.routes[0][0].look ?? null,
@@ -180,7 +184,9 @@ export function perception(level, g, x, y, run, hidden) {
 function stepGuard(level, state, g) {
   const spec = level.guards.find(s => s.id === g.id);
   const p = state.player;
-  const per = perception(level, g, p.x, p.y, p.moving && p.run, state.hidden);
+  const smoked = state.smoke > 0;
+  const per = perception(level, g, p.x, p.y, p.moving && p.run, state.hidden || smoked);
+  if (smoked) per.hears = false;
   g.sawPlayer = per.sees;
   if (per.sees) g.meter += DT / (SPOT_TIME_NEAR + (SPOT_TIME_FAR - SPOT_TIME_NEAR) * (per.dist / per.range));
   if (per.hears) {
@@ -191,7 +197,7 @@ function stepGuard(level, state, g) {
   if (!per.sees && !per.hears) g.meter -= DT / 1.5;
   if (per.sees) { g.ax = p.x; g.ay = p.y; }
   if (g.meter < 0) g.meter = 0;
-  if (per.dist < 0.55) g.meter = 1;
+  if (per.dist < 0.55 && !smoked) g.meter = 1;
   if (g.meter > 1) g.meter = 1;
   if (g.meter > state.maxMeter) state.maxMeter = g.meter;
 
@@ -239,6 +245,7 @@ export function step(level, state, rawInput) {
   const input = sanitizeInput(rawInput);
   state.events.length = 0;
   state.tick++;
+  if (state.smoke > 0) state.smoke = Math.max(0, state.smoke - DT);
 
   const p = state.player;
   let ix = input.mx / MAX_INPUT, iy = input.my / MAX_INPUT;
@@ -275,6 +282,15 @@ export function step(level, state, rawInput) {
   return state;
 }
 
+/** Use the Smoke Grenade after a capture: guards lose you and the run resumes. Returns false if there is none to use. */
+export function revive(state) {
+  if (state.status !== "caught" || state.smokes <= 0) return false;
+  state.smokes = 0; state.smoke = SMOKE_TIME; state.status = "playing";
+  for (const g of state.guards) { g.meter = 0; g.hold = 0; g.sawPlayer = false; g.ax = null; g.ay = null; }
+  state.events.length = 0; state.events.push({ type: "smoke" });
+  return true;
+}
+
 export const ticksToMs = ticks => Math.round((ticks * 1000) / TICK_RATE);
 
 /** Results shown after a run and recorded on the server. */
@@ -296,12 +312,21 @@ export function summarize(level, state) {
   };
 }
 
-/** Replay a recorded input log: [[tick, mx, my, run], ...] sorted by tick, held until the next entry. */
-export function replay(level, log, maxTicks = TICK_RATE * 240) {
-  const state = createState(level);
+/**
+ * Replay a recorded input log: [[tick, mx, my, run], ...] sorted by tick, held until the next entry.
+ * A 5-entry [tick, 0, 0, 0, 1] marks the Smoke Grenade used at the capture on that tick.
+ */
+export function replay(level, log, maxTicks = TICK_RATE * 240, smokes = 0) {
+  const state = createState(level, smokes);
   let held = { mx: 0, my: 0, run: false }, i = 0;
-  while (state.status === "playing" && state.tick < maxTicks) {
-    while (i < log.length && log[i][0] <= state.tick) { held = { mx: log[i][1], my: log[i][2], run: !!log[i][3] }; i++; }
+  while (state.tick < maxTicks) {
+    if (state.status === "caught") {
+      const m = log[i];
+      if (m && m.length === 5 && m[0] === state.tick && revive(state)) { i++; continue; }
+      break;
+    }
+    if (state.status !== "playing") break;
+    while (i < log.length && log[i][0] <= state.tick && log[i].length !== 5) { held = { mx: log[i][1], my: log[i][2], run: !!log[i][3] }; i++; }
     step(level, state, held);
   }
   return state;

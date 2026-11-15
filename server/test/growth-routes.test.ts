@@ -33,15 +33,6 @@ const waitIdle = async (admin: Awaited<ReturnType<typeof app>>["admin"]) => {
 };
 
 describe("Mission Control routes", () => {
-  it("serves the page with a strict CSP and no secrets", async () => {
-    const { url } = await app();
-    const r = await fetch(`${url}/growth`);
-    expect(r.status).toBe(200);
-    expect(r.headers.get("content-security-policy")).toContain("default-src 'none'");
-    const html = await r.text();
-    expect(html).toContain("MISSION CONTROL");
-    expect(html).not.toContain(TOKEN);
-  });
   it("admin endpoints require the token (constant-time compare), public ones do not", async () => {
     const { url, admin } = await app();
     expect((await fetch(`${url}/api/growth/state`)).status).toBe(401);
@@ -135,8 +126,7 @@ describe("Mission Control routes", () => {
     const a = await app();
     expect((await fetch(`${a.url}/api/activity`)).status).toBe(200);
     const g = await app({ gameOnly: true });
-    expect((await fetch(`${g.url}/growth`)).status).not.toBe(200);
-    expect((await g.admin("/api/growth/state")).status).toBe(404);
+        expect((await g.admin("/api/growth/state")).status).toBe(404);
   });
   it("oversized bodies are rejected", async () => {
     const { admin } = await app();

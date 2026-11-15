@@ -47,8 +47,8 @@ export const short = account => (account.length > 28 ? `${account.split(".")[0]}
 
 export function header(active) {
   const link = (href, label, key) => `<a href="${href}"${active === key ? ' aria-current="page"' : ""}>${label}</a>`;
-  const gameSite = active === 'ledger' ? 'https://ram-heist-game.vercel.app' : '';
-  return `<a class="brand" href="/">AGENT CORP</a>
-    <nav aria-label="Main">${link("/", "Ledger", "ledger")}${link(`${gameSite}/store`, "Store", "store")}${link(`${gameSite}/game`, "Game", "game")}</nav>
+  const gameSite = active === 'ledger' || active === 'security' ? 'https://ram-heist-game.vercel.app' : '';
+  return `<a class="brand" href="/">FOUNDRY STACK</a>
+    <nav aria-label="Main">${link("/ledger", "Ledger", "ledger")}${active === 'ledger' || active === 'security' ? link("/investor", "Investor", "investor") : ''}${link(`${gameSite}/store`, "Store", "store")}${link(`${gameSite}/game`, "Game", "game")}</nav>
     <b class="badge">TESTNET · DEMO</b>`;
 }

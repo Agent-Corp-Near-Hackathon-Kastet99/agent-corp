@@ -10,9 +10,9 @@ if (!backend || !/^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(backend)) throw new Er
 // The server must be reachable over HTTPS before this static site is deployed.
 await rm(out, { recursive: true, force: true });
 await mkdir(join(out, 'shared'), { recursive: true });
-for (const file of ['game.html', 'game3d.js', 'game.css', 'store.html', 'store.js', 'style.css', 'chain.js', 'wallet.js']) await cp(join(root, 'server', 'web', file), join(out, file));
+for (const file of ['game.html', 'game3d.js', 'game.css', 'style.css', 'chain.js', 'wallet.js', 'wallet-callback.html', 'wallet.css', 'investor.html', 'investor.js', 'landing.css', 'hackathon.js']) await cp(join(root, 'server', 'web', file), join(out, file));
 await cp(join(root, 'shared', 'src', 'money.js'), join(out, 'shared', 'money.js'));
 const chain = join(out, 'chain.js');
-await writeFile(chain, (await readFile(chain, 'utf8')).replace('${link("/", "Ledger", "ledger")}', '').replace('class="brand" href="/"', 'class="brand" href="/game"'));
+await writeFile(chain, (await readFile(chain, 'utf8')).replace('${link("/ledger", "Ledger", "ledger")}', '').replace('class="brand" href="/"', 'class="brand" href="/game"'));
 await writeFile(join(out, 'vercel.json'), JSON.stringify({ cleanUrls: true, redirects: [{ source: '/', destination: '/game', permanent: false }], rewrites: [{ source: '/api/:path*', destination: `${backend}/api/:path*` }] }, null, 2));
 console.log(`Built game site in ${out} → API ${backend}`);

@@ -318,9 +318,4 @@ describe("Board inside the growth harness", () => {
     expect((await admin("/api/growth/board/finalize", { proposalId: 0 })).status).toBe(400); // voting still open
   });
 
-  it("the page renders a Board panel (static check)", async () => {
-    const { PAGE_HTML } = await import("../src/growth/page.js");
-    expect(PAGE_HTML).toContain('id="board"');
-    expect(PAGE_HTML).toContain("/api/growth/board/vote");
-  });
 });

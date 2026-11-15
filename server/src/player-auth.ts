@@ -29,8 +29,8 @@ export class PlayerAuth {
     for (const [key, c] of this.challenges) if (c.expires <= this.now()) this.challenges.delete(key);
     if (this.challenges.size >= 1000) throw new Error("Login capacity reached; retry later");
     const nonce = randomBytes(32).toString("base64url"), browser = randomBytes(32).toString("base64url");
-    const challenge = { account, nonce, recipient: origin, callbackUrl: `${origin}/store`,
-      message: `Sign in to Alt-Ram Sam as ${account}. Network: testnet. Contract: ${this.contract}. This does not authorize a transaction.` };
+    const challenge = { account, nonce, recipient: origin, callbackUrl: `${origin}/wallet-callback`,
+      message: `Sign in to Sam Alt-Ram as ${account}. Network: testnet. Contract: ${this.contract}. This does not authorize a transaction.` };
     this.challenges.set(nonce, { challenge, browser, expires: this.now() + 5 * 60_000 });
     return { challenge, browser };
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FOUNDER_HOUSE as level } from "../src/levels.js";
-import { compile, createState, perception, replay, step, summarize, DT, WALK_SPEED, SPRINT_MAX } from "../web/sneak-core.js";
+import { compile, createState, perception, replay, revive, step, summarize, DT, WALK_SPEED, SPRINT_MAX } from "../web/sneak-core.js";
 import { planWinningRun, type Log } from "./sneak-plan.js";
 
 describe("level data", () => {
@@ -98,6 +98,34 @@ describe("simulation", () => {
     const a = replay(level, log, 900), b = replay(level, log, 900);
     expect(a.player).toEqual(b.player);
     expect(a.guards).toEqual(b.guards);
+  });
+
+  it("Smoke Grenade resumes a caught run once, unseen for a few seconds, and replays identically", () => {
+    const place = (smokes: number) => {
+      const s = createState(level, smokes), g = s.guards[0]!;
+      s.player.x = g.x + g.hx * 0.3; s.player.y = g.y + g.hy * 0.3; // point blank: instant capture
+      return s;
+    };
+    const plain = place(0); step(level, plain, { mx: 0, my: 0, run: false });
+    expect(plain.status).toBe("caught");
+    expect(revive(plain)).toBe(false);
+    const s = place(1); step(level, s, { mx: 0, my: 0, run: false });
+    expect(s.status).toBe("caught");
+    expect(revive(s)).toBe(true);
+    expect(s.status).toBe("playing");
+    for (let i = 0; i < 60; i++) step(level, s, { mx: 0, my: 0, run: false });
+    expect(s.status).toBe("playing");
+    expect(revive(s)).toBe(false);
+  });
+
+  it("replay applies the grenade marker only when a grenade is owned", () => {
+    const probe = createState(level, 1), g = probe.guards[0]!;
+    const start = { x: g.x + g.hx * 0.3, y: g.y + g.hy * 0.3 };
+    const lvl = { ...level, start };
+    const log = [[0, 0, 0, 0], [1, 0, 0, 0, 1]] as unknown as Log;
+    expect(replay(lvl, log, 120, 0).status).toBe("caught");
+    const withSmoke = replay(lvl, log, 120, 1);
+    expect(withSmoke.tick).toBe(120);
   });
 
   it("cannot leave early: the exit needs both RAM sticks", () => {

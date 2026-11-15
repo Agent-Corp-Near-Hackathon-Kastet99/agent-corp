@@ -79,11 +79,12 @@ export async function start(opts: Opts): Promise<void> {
   })();
   const shutdown = () => { ws.close(); void close().catch(error => { console.error(error); process.exitCode = 1; }); };
   process.once("SIGINT", shutdown); process.once("SIGTERM", shutdown);
-  ws.addEventListener("close", () => {
+  ws.addEventListener("close", event => {
+    if (!authenticated) { console.error(`Server connection closed before login${event.reason ? `: ${event.reason}` : ""} (code ${event.code}). Check the server address and that the server is running.`); process.exitCode = 1; }
     process.removeListener("SIGINT", shutdown); process.removeListener("SIGTERM", shutdown);
     void close().catch(error => { console.error(error); process.exitCode = 1; });
   });
-  ws.addEventListener("error", shutdown);
+  ws.addEventListener("error", () => { if (!authenticated) console.error(`Cannot reach ${opts.server}. Start the server first.`); shutdown(); });
   ws.addEventListener("message", ({ data }) => {
     void (async () => {
       const msg = JSON.parse(String(data)) as ServerToWorker;

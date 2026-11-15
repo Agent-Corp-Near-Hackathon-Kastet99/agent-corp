@@ -45,3 +45,13 @@ bin/
 # Growth harness: keep the example file tracked, real values never
 !.env.growth.example
 growth/policy.local.yaml
+
+# Images are not published
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.svg
+*.ico
+*.avif

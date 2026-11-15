@@ -3,7 +3,6 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { hasPlaceholderUrl } from "./brief.js";
 import { mimeFor } from "./engine.js";
 import { OptInStore } from "./optin.js";
-import { PAGE_HTML } from "./page.js";
 import type { GrowthRuntime } from "./runtime.js";
 import { errMsg, safeEqual } from "./util.js";
 
@@ -45,16 +44,9 @@ const str = (v: unknown, name: string, max = 200) => {
 export async function handleGrowthRequest(rt: GrowthRuntime, req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> {
   const path = url.pathname;
   const method = req.method ?? "GET";
-  if (path !== "/growth" && !path.startsWith("/api/growth/")) return false;
+  if (!path.startsWith("/api/growth/")) return false;
   const e = rt.engine;
   const { state, cycles, events, optin, tools, llm, dryRun, now } = e.d;
-
-  if (path === "/growth" && method === "GET") {
-    res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff",
-      "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src blob: data:; connect-src 'self'; base-uri 'none'; form-action 'none'" });
-    res.end(PAGE_HTML);
-    return true;
-  }
 
   try {
     // ---- public endpoints

@@ -71,6 +71,11 @@ fn buy(c: &mut Contract, who: &str, deposit: u128) -> Pass {
     c.buy_pass()
 }
 
+fn buy_smoke(c: &mut Contract, who: &str, deposit: u128) -> Sale {
+    testing_env!(ctx(who, deposit, T0).build());
+    c.buy_smoke_grenade()
+}
+
 fn approve_budget(c: &mut Contract, cap: u128) {
     as_("ceo.near");
     let option = format!(r#"{{"max_expense_per_period":"{cap}"}}"#);
@@ -223,6 +228,24 @@ fn pass_purchase_is_revenue_and_leaves_claimable_unchanged() {
     assert_eq!(sales.len(), 1);
     assert_eq!(sales[0].product, "ram-heist-pass");
     assert_eq!(sales[0].amount.0, NEAR);
+}
+
+#[test]
+fn smoke_grenade_purchase_is_ledger_revenue_without_a_pass() {
+    let mut c = seeded();
+    let sale = buy_smoke(&mut c, "player.near", NEAR);
+    assert_eq!(sale.product, "smoke-grenade");
+    assert_eq!(sale.amount.0, NEAR);
+    assert_eq!(c.get_treasury().period_revenue.0, NEAR);
+    assert!(!c.has_pass(acc("player.near")));
+    assert_eq!(c.get_sales(None, None)[0].product, "smoke-grenade");
+}
+
+#[test]
+#[should_panic(expected = "Smoke Grenade price must be exact")]
+fn smoke_grenade_rejects_inexact_payment() {
+    let mut c = seeded();
+    buy_smoke(&mut c, "player.near", NEAR + 1);
 }
 
 #[test]

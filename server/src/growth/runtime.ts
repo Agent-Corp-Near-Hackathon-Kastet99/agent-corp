@@ -106,7 +106,7 @@ export function createGrowthRuntime(o: RuntimeOptions): GrowthRuntime {
   const rt: GrowthRuntime = {
     engine, board, loop, adminToken, expenses,
     handle: (req, res, url) => {
-      if (url.pathname !== "/growth" && !url.pathname.startsWith("/api/growth/")) return Promise.resolve(false);
+      if (!url.pathname.startsWith("/api/growth/")) return Promise.resolve(false);
       if (stopping) { res.writeHead(503, { "content-type": "application/json" }); res.end(JSON.stringify({ error: "growth is shutting down" })); return Promise.resolve(true); }
       return lifecycle.run(() => handleGrowthRequest(rt, req, res, url));
     },

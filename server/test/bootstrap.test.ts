@@ -11,7 +11,7 @@ vi.mock("../src/agents.js", () => ({ CompanyAgents: class { tick = fixture.tick;
 vi.mock("../src/near.js", () => ({ createLedger: () => ({}), reason: (error: Error) => error.message }));
 vi.mock("../src/credentials.js", () => ({ keysExist: () => true, loadKeys: () => ({}) }));
 vi.mock("../src/config.js", () => ({ loadConfig: fixture.loadConfig }));
-vi.mock("../src/store.js", () => ({ Store: class { log = vi.fn(); } }));
+vi.mock("../src/store.js", () => ({ Store: class { log = vi.fn(); tasks = () => []; upsertTask = vi.fn(); } }));
 vi.mock("../src/workers.js", () => ({ attachWorkers: () => fixture.stopWorkers }));
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 

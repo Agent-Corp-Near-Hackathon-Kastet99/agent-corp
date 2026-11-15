@@ -4,7 +4,7 @@ const fmt = (ms: number) => { const s = ms / 1000; return `${Math.floor(s / 60)}
 
 export type ResultView = {
   won: boolean; ms: number; targetMs: number; lootPct: number; loot: number; lootTotal: number; score: number;
-  medals: { undetected: boolean; time: boolean; loot: boolean }; best?: number; verified: boolean | null;
+  medals: { undetected: boolean; time: boolean; loot: boolean }; best?: number;
 };
 
 export class Hud {
@@ -19,7 +19,7 @@ export class Hud {
     this.root = root;
     root.innerHTML = `
       <div class="hud-top">
-        <div class="game-logo" aria-label="Alt-Ram Sam">ALT-RAM <em>SAM</em></div>
+        <div class="game-logo" aria-label="Sam Alt-Ram">SAM ALT-<em>RAM</em></div>
       </div>
       <div class="hud-objective"><span id="hud-objective-text"></span></div>
       <div class="marker objective" id="marker-objective"><span class="marker-pill" id="marker-label">RAM</span><i class="marker-arrow"></i></div>
@@ -98,7 +98,7 @@ export class Hud {
     const el = this.show("ov-intro", `
       <div class="card intro-card">
         <span class="stamp">MISSION 01</span>
-        <h1>ALT-RAM <em>SAM</em></h1>
+        <h1>SAM ALT-<em>RAM</em></h1>
         <p class="sub">Founder HQ · 11:47 PM · RAM is $400 a stick</p>
         <ul class="brief">
           <li><b>1</b><span>Steal <strong>both RAM sticks</strong>. Anything shiny is bonus loot.</span></li>
@@ -114,14 +114,26 @@ export class Hud {
     addEventListener("keydown", key);
   }
 
-  busted(quip: string, onRetry: () => void) {
+  /** BUSTED: Smoke Grenade (use if owned, otherwise buy for 1 NEAR) resumes the run on the spot; RETRY restarts it. */
+  busted(quip: string, onRetry: () => void, smoke: { owned: boolean; buy: () => Promise<void>; use: () => void }) {
     const el = this.show("ov-busted", `
       <div class="iris"></div>
-      <div class="busted-card"><div class="busted-stamp">BUSTED!</div><p>${quip}</p><a class="big" href="/store">SMOKE ESCAPE <small>1 tNEAR</small></a><button class="ghost retry" id="retry">RETRY <small>Enter</small></button></div>`);
+      <div class="busted-card"><div class="busted-stamp">BUSTED!</div><p>${quip}</p>
+        <button class="big" id="grenade" type="button">SMOKE GRENADE <small>${smoke.owned ? "ESCAPE" : "1 NEAR"}</small></button>
+        <p class="gstatus" id="gstatus" role="status"></p>
+        <button class="ghost retry" id="retry">RETRY <small>Enter</small></button></div>`);
     const go = () => { removeEventListener("keydown", key); el.hidden = true; onRetry(); };
-    const key = (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } };
+    const key = (e: KeyboardEvent) => { if ((e.key === "Enter" || e.key === " ") && document.activeElement?.id !== "grenade") { e.preventDefault(); go(); } };
     $("#retry", el).addEventListener("click", go);
     setTimeout(() => addEventListener("keydown", key), 250);
+    const buy = $("#grenade", el) as HTMLButtonElement, status = $("#gstatus", el), retry = $("#retry", el) as HTMLButtonElement;
+    buy.addEventListener("click", async () => {
+      buy.disabled = true; retry.disabled = true;
+      try {
+        if (!smoke.owned) { status.textContent = "Approve the 1 NEAR payment in your wallet…"; await smoke.buy(); }
+        removeEventListener("keydown", key); el.hidden = true; smoke.use();
+      } catch (e) { status.textContent = (e as Error).message; buy.disabled = false; retry.disabled = false; }
+    });
   }
 
   results(r: ResultView, onRetry: () => void) {
@@ -136,8 +148,7 @@ export class Hud {
             ${medal(r.medals.loot, "Loot", `${r.loot}/${r.lootTotal} (${r.lootPct}%)`, "💰")}
           </div>
           <div class="score"><span>SCORE</span><b>${r.score.toLocaleString()}</b></div>
-          <p class="verify">${r.verified === true ? "✓ Run verified by the server" : r.verified === false ? "Run could not be verified" : "Verifying run…"}${r.best ? ` · Best ${fmt(r.best)}` : ""}</p>
-          <div class="btns"><button class="big" id="again">PLAY AGAIN <small>Enter</small></button><a class="ghost" href="/store">Store</a></div>
+          <div class="btns"><button class="big" id="again">PLAY AGAIN <small>Enter</small></button></div>
         </div>
       </div>`);
     const go = () => { removeEventListener("keydown", key); el.hidden = true; onRetry(); };
@@ -145,12 +156,8 @@ export class Hud {
     $("#again", el).addEventListener("click", go);
     setTimeout(() => addEventListener("keydown", key), 400);
   }
-  setVerified(ok: boolean, best?: number) {
-    const el = this.root.querySelector(".verify");
-    if (el) el.textContent = `${ok ? "✓ Run verified by the server" : "Run could not be verified"}${best ? ` · Best ${fmt(best)}` : ""}`;
-  }
 
   locked(message: string) {
-    this.show("ov-locked", `<div class="card"><span class="stamp">PASS REQUIRED</span><h1>ALT-RAM <em>SAM</em></h1><p>${message}</p><a class="big link" href="/store">GET A PASS</a></div>`);
+    this.show("ov-locked", `<div class="card"><span class="stamp">UNAVAILABLE</span><h1>SAM ALT-<em>RAM</em></h1><p>${message}</p></div>`);
   }
 }

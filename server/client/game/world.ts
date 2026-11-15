@@ -635,7 +635,8 @@ export class World {
     for (let i = 0; i < 3; i++) {
       const sh = new THREE.Shape(); sh.moveTo(-0.3, 0); sh.lineTo(0, 0.3); sh.lineTo(0.3, 0); sh.lineTo(0.3, -0.12); sh.lineTo(0, 0.18); sh.lineTo(-0.3, -0.12); sh.closePath();
       const a = new THREE.Mesh(new THREE.ShapeGeometry(sh), new THREE.MeshBasicMaterial({ color: 0x7dffb8, transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide }));
-      a.rotation.x = -Math.PI / 2; a.rotation.z = Math.PI / 2; a.position.set(-0.2 - i * 0.0, 0.06, 0); a.userData.i = i;
+      // Point chevrons forward through exit.
+      a.rotation.x = -Math.PI / 2; a.rotation.z = 0; a.position.set(-0.2 - i * 0.0, 0.06, 0); a.userData.i = i;
       arrows.add(a);
     }
     const light = new THREE.PointLight(0x39e08a, 12, 5, 2); light.position.set(-0.4, 1.4, 0);

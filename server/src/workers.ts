@@ -8,7 +8,7 @@ import { RPC_URL } from "./near.js";
 import type { Ledger } from "./ledger.js";
 import type { Store, Task } from "./store.js";
 
-type Dependencies = { retryIntervalMs?: number; rpc?: AccessKeyRpc; credit?: (worker: string, units: string, ref: string) => Promise<void>; policy?: WorkerPolicy };
+type Dependencies = { retryIntervalMs?: number; rpc?: AccessKeyRpc; credit?: (worker: string, units: string, ref: string) => Promise<void>; policy?: WorkerPolicy; onConnectionTest?: (worker: string) => void; onTaskCompleted?: (task: Task) => Promise<void> | void };
 const taskLimit = 100_000n;
 
 /** Authenticated worker transport. Recorded reports use an idempotent contract reference. */
@@ -103,6 +103,8 @@ export function attachWorkers(server: Server, ledger: Ledger, store: Store, deps
       store.upsertTask(task);
       active = undefined;
       store.log({ ts: Date.now(), actor: "WORKER", text: `${worker} ${task.status === "done" ? "completed" : "failed"} ${task.title}` });
+      if (task.status === "done" && task.id.startsWith("worker-test-")) deps.onConnectionTest?.(worker);
+      if (task.status === "done") await deps.onTaskCompleted?.(task);
       await creditTask(task); assign();
     })().catch(() => ws.close(1011, "worker error")); });
     ws.on("close", () => {

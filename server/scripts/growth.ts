@@ -19,7 +19,7 @@ if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error("Invali
 server.listen(port, process.env.HOST ?? "127.0.0.1", () => {
   const mode = growth.engine.d.dryRun ? "DRY-RUN (nothing leaves this machine)" : "LIVE";
   console.log(`Growth harness ${mode}; chain: ${ledger ? ledger.contractId : "none"}`);
-  console.log(`Mission Control: http://127.0.0.1:${port}/growth#token=${growth.adminToken}`);
+  console.log(`Growth harness API on http://127.0.0.1:${port}/api/growth/ (admin token ${growth.adminToken})`);
 });
 for (const s of ["SIGINT", "SIGTERM"] as const) process.once(s, () => {
   server.close();

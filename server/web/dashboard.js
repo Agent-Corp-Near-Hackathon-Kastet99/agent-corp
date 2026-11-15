@@ -1,7 +1,20 @@
 import {header, view, api, tnear, esc, when} from './chain.js';
 import {canWithdraw, closedPeriods} from './dashboard-model.js';
+if(new URLSearchParams(location.search).has('embed'))document.documentElement.classList.add('embed');
 document.querySelector('#header').innerHTML=header('ledger');
 const $=s=>document.querySelector(s), status=$('#status');
+let player;
+async function refreshWallet(){
+  try{player=await api('/api/player/me')}catch(e){if(e.status!==401)throw e;player=undefined}
+  $('#wallet-connect').hidden=!!player; $('#wallet-disconnect').hidden=!player; $('#wallet-withdraw').hidden=true;
+  if(!player){$('#wallet-status').textContent='Connect a wallet to view your contribution.';return}
+  const contributor=await view('get_contributor',{account_id:player.account});
+  $('#wallet-status').textContent=contributor?`${player.account} · ${contributor.units} units · ${(contributor.share_bps/100).toFixed(2)}% · ${tnear(contributor.claimable)} claimable`:`${player.account} · no contribution recorded yet`;
+  $('#wallet-withdraw').hidden=!contributor||BigInt(contributor.claimable)===0n;
+}
+$('#wallet-connect').onclick=async()=>{try{const {connectPlayer}=await import('./wallet.js');await connectPlayer();await refreshWallet()}catch(e){status.textContent=e.message}};
+$('#wallet-disconnect').onclick=async()=>{try{const {disconnectPlayer}=await import('./wallet.js');await disconnectPlayer();await refreshWallet()}catch(e){status.textContent=e.message}};
+$('#wallet-withdraw').onclick=async e=>{e.currentTarget.disabled=true;try{const {withdrawPlayer}=await import('./wallet.js');const hash=await withdrawPlayer(player.account);const dep=await api('/api/deployment');$('#wallet-receipt').innerHTML=hash?`Withdrawal submitted. Check final execution and transfer: <a href="${esc(dep.explorer)}/txns/${encodeURIComponent(hash)}">Testnet transaction ↗</a>`:'Withdrawal submitted. Check your wallet for final execution.';await refreshWallet()}catch(error){status.textContent=error.message}finally{e.currentTarget.disabled=false}};
 async function load(){try{const [ledger,dep,tasks]=await Promise.all([api('/api/dashboard'),api('/api/deployment'),api('/api/tasks')]); const {treasury,currentPeriod:period,contributors:people,expenses,proposals,activity,periods}=ledger;
 $('#metrics').innerHTML=[['Period revenue',treasury.period_revenue],['Paid costs',treasury.period_costs],['Expense reserve',treasury.expense_reserve],['Distribution reserve',treasury.distribution_reserve]].map(([label,n])=>`<div class="card"><small>${label}</small><strong>${tnear(n)}</strong></div>`).join('');
 $('#contributors').innerHTML=people.map(p=>{let role=canWithdraw(p,dep.demoWallets);return `<div class="row"><div><b>${esc(p.account_id)}</b><br><span class="muted mono">${esc(p.units)} units · ${(p.share_bps/100).toFixed(2)}%</span></div><div>${tnear(p.claimable)} claimable ${role?`<button data-withdraw="${role}">Withdraw</button>`:''}</div></div>`}).join('')||'<p>No contributors yet.</p>';
@@ -13,10 +26,12 @@ $('#vote').onclick=e=>{if(e.target.dataset.vote!==undefined)action('/api/demo/vo
 $('#periods').innerHTML=closedPeriods(periods).map(p=>`<div class="row"><span>Period ${esc(p.id)}${p.demo_close?' · DEMO early close':''}<br><span class="muted mono">Revenue ${tnear(p.revenue)} · costs ${tnear(p.operating_costs)} · reserve ${tnear(p.expense_reserve_top_up)}</span></span><span>${tnear(p.distributed)} distributed <button class="secondary" data-period="${esc(p.id)}">Receipt</button></span></div>`).join('')||'<p>No closed periods.</p>';
 $('#periods').onclick=async e=>{if(e.target.dataset.period===undefined)return;try{const r=await view('get_period_receipt',{period_id:Number(e.target.dataset.period)});status.textContent=`Period ${r.period.id}: `+r.allocations.map(a=>`${a.account_id}: ${tnear(a.amount)} (${a.units} units)`).join(' · ')}catch(error){status.textContent=error.message}};
 $('#studio').innerHTML=['CEO','WORKER','CUSTOMER','CONTRACT'].map(actor=>{const event=activity.find(a=>a.actor===actor);return `<div class="station"><b>${esc(actor)}</b><span>${event?esc(event.text):'No recorded activity'}</span>${event?`<small>${new Date(event.ts).toLocaleString()}</small>${event.explorerUrl?`<a href="${esc(event.explorerUrl)}">Receipt ↗</a>`:''}`:''}</div>`}).join('');
-$('#activity').innerHTML=activity.map(a=>`<div class="row"><span>${esc(a.text)}<br><span class="muted mono">${new Date(a.ts).toLocaleString()}</span></span>${a.explorerUrl?`<a href="${esc(a.explorerUrl)}">Receipt</a>`:''}</div>`).join('')||'<p>No activity recorded.</p>';
+$('#activity').innerHTML=activity.map(a=>`<div class="row"><span>${esc(a.text)}<br><span class="muted mono">${new Date(a.ts).toLocaleString()}</span>${a.explorerUrl?`<small class="receipt"><a href="${esc(a.explorerUrl)}">Receipt ↗</a></small>`:''}</span></div>`).join('')||'<p>No activity recorded.</p>';
 status.textContent=`Period ${period.id} · next close ${when(period.ends_at)} · estimated net excludes reserve top-up`;
 }catch(e){status.textContent=e.message;status.classList.add('error')}}
 async function action(path,body={}){try{status.textContent='Waiting for testnet transaction…';await api(path,body);await load()}catch(e){status.textContent=e.message;status.classList.add('error')}}
-$('#seed').onclick=()=>action('/api/demo/seed-tasks');$('#agents').onclick=()=>action('/api/demo/agents');$('#close').onclick=()=>action('/api/demo/close');$('#contributors').onclick=e=>{const role=e.target.dataset.withdraw;if(role)action('/api/demo/withdraw',{wallet:role})};load();
+$('#seed').onclick=()=>action('/api/demo/seed-tasks');$('#agents').onclick=()=>action('/api/demo/agents');$('#close').onclick=()=>action('/api/demo/close');$('#contributors').onclick=e=>{const role=e.target.dataset.withdraw;if(role)action('/api/demo/withdraw',{wallet:role})};load();refreshWallet().catch(e=>{status.textContent=e.message});
 
 $('#motion').onclick=e=>{const paused=e.currentTarget.getAttribute('aria-pressed')!=='true';e.currentTarget.setAttribute('aria-pressed',String(paused));e.currentTarget.textContent=paused?'Resume motion':'Pause motion';$('#studio').classList.toggle('paused',paused)};
+$('#seed').closest('section').hidden=true;
+$('#wallet-connect').closest('section').hidden=true;

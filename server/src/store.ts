@@ -43,7 +43,11 @@ export class Store {
     this.state = next;
   }
   log = (entry: Activity) => {
-    this.update(next => { next.activity.unshift(structuredClone(entry)); next.activity.length = Math.min(next.activity.length, 200); });
+    this.update(next => {
+      // Receipts can be replayed after a restart. A chain transaction is one activity record.
+      if (entry.txHash && next.activity.some(item => item.txHash === entry.txHash)) return;
+      next.activity.unshift(structuredClone(entry)); next.activity.length = Math.min(next.activity.length, 200);
+    });
     console.log(`[${entry.actor}] ${entry.text}${entry.txHash ? ` (${entry.txHash})` : ""}`);
   };
   activity(limit = 50) { return structuredClone(this.state.activity.slice(0, limit)); }

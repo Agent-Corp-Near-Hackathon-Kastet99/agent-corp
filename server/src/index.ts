@@ -8,18 +8,26 @@ import { loadConfig } from "./config.js";
 import { workerPolicy } from "./providers.js";
 import { Store } from "./store.js";
 import { createGrowthRuntime } from "./growth/runtime.js";
+import { createHackathon } from "./hackathon.js";
 
 const store = new Store();
 const ledger = keysExist() ? createLedger(loadKeys()) : undefined;
 const agents = ledger ? new CompanyAgents(ledger, store.log) : undefined;
 const growth = process.env.GROWTH === "off" ? undefined : createGrowthRuntime({ log: store.log, ledger });
-const server = createApplication({ store, ledger, agents, growth, demoActions: process.env.DEMO_ACTIONS === "on" });
-const stopWorkers = ledger ? attachWorkers(server, ledger, store, { policy: workerPolicy(loadConfig().worker_policy) }) : undefined;
+const hackathon = createHackathon(ledger?.contractId, undefined, jobId => store.upsertTask({ id: `launch-copy-${jobId}`, kind: "marketing", title: "Generate X launch post", prompt: "Write one original X post for Foundry Stack and RAM HEIST. Mention that contributors put unused AI subscription capacity to work, earn units, and help build products. Keep it factual, punchy, under 280 characters. Return only the post text: no quote marks, hashtags, links, intro or explanation.", status: "queued" }), store.log);
+// Preserve a verified local connection across a server restart; no new inference is started.
+const lastConnectionTest = store.tasks().slice().reverse().find(task => task.status === "done" && task.id.startsWith("worker-test-") && task.worker);
+if (lastConnectionTest?.worker) hackathon?.demo.recordWorkerConnection(lastConnectionTest.worker);
+const server = createApplication({ store, ledger, agents, growth, hackathon: hackathon?.demo, macDownload: hackathon?.macZip, demoActions: process.env.DEMO_ACTIONS === "on" });
+const stopWorkers = ledger ? attachWorkers(server, ledger, store, { policy: workerPolicy(loadConfig().worker_policy), onConnectionTest: worker => hackathon?.demo.recordWorkerConnection(worker), onTaskCompleted: async task => {
+  const match = /^launch-copy-(job-.+)$/.exec(task.id);
+  if (match) await hackathon?.demo.completeLaunchCopy(match[1]!, task);
+} }) : undefined;
 const port = Number(process.env.PORT ?? 8787);
 if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error("Invalid PORT");
 server.listen(port, process.env.HOST ?? "127.0.0.1", () => {
   console.log(`Agent Corp listening on ${JSON.stringify(server.address())}`);
-  if (growth) console.log(`Mission Control (${growth.engine.d.dryRun ? "DRY-RUN" : "LIVE"}): http://127.0.0.1:${port}/growth#token=${growth.adminToken}`);
+  if (growth) console.log(`Growth harness (${growth.engine.d.dryRun ? "DRY-RUN" : "LIVE"}): API admin token ${growth.adminToken}`);
 });
 let timer: NodeJS.Timeout | undefined;
 if (ledger && process.env.AGENTS !== "off") {
@@ -35,6 +43,7 @@ if (ledger && process.env.AGENTS !== "off") {
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => {
   if (timer) clearInterval(timer);
   stopWorkers?.();
+  hackathon?.demo.stop();
   server.close();
   void growth?.stop().catch(error => { console.error("[growth] shutdown failed", error); process.exitCode = 1; });
 });

@@ -23,9 +23,8 @@ describe("HTTP application Interface", () => {
     const { url, ledger } = await app(true, true);
     const post = (path: string, origin: string) => fetch(`${url}${path}`, { method: "POST", headers: { "content-type": "application/json", origin }, body: "{}" });
     expect((await post("/api/demo/close", "https://game.example")).status).toBe(404);
-    expect((await post("/api/demo/buy", "https://attacker.example")).status).toBe(403);
+    expect((await post("/api/demo/buy", "https://attacker.example")).status).toBe(404);
     expect((await post("/api/game/step", "https://attacker.example")).status).toBe(403);
-    ledger.passes.add(ledger.accounts.customer);
     const session = await post("/api/demo/session", "https://game.example");
     expect(session.status).toBe(200);
     expect(session.headers.get("set-cookie")).toContain("Secure");
@@ -33,10 +32,9 @@ describe("HTTP application Interface", () => {
     const deployment = await (await fetch(`${url}/api/deployment`)).json();
     expect(deployment.demoWallets).toEqual({ customer: ledger.accounts.customer });
   });
-  it("gates level, activates pass through explicit demo capability, saves score", async () => {
+  it("opens a free level and saves score", async () => {
     const { ledger, url } = await app(true);
     expect((await fetch(`${url}/api/game/levels/house-01?account=customer.testnet`)).status).toBe(401);
-    expect((await fetch(`${url}/api/demo/buy`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status).toBe(201);
     const session = await fetch(`${url}/api/demo/session`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
     expect(session.status).toBe(200); const cookie = session.headers.get("set-cookie")!.split(";")[0]!;
     const level = await (await fetch(`${url}/api/game/levels/house-01`, { headers: { cookie } })).json();
@@ -46,14 +44,14 @@ describe("HTTP application Interface", () => {
     expect((await fetch(`${url}/api/dashboard`)).status).toBe(200);
     expect((await ledger.view<{ claimable_total: string }>("get_treasury")).claimable_total).toBe("0");
   });
-  it("rejects disabled, cross-origin and non-demo signing", async () => {
-    const off = await app(); expect((await fetch(`${off.url}/api/demo/buy`, { method: "POST" })).status).toBe(403); expect(off.ledger.calls).toEqual([]);
-    const on = await app(true); expect((await fetch(`${on.url}/api/demo/buy`, { method: "POST", headers: { origin: "https://attacker.test" } })).status).toBe(403);
-    on.ledger.config.demo_mode = false; expect((await fetch(`${on.url}/api/demo/buy`, { method: "POST" })).status).toBe(403); expect(on.ledger.calls).toEqual([]);
+  it("does not expose a demo purchase endpoint", async () => {
+    const { url, ledger } = await app(true);
+    expect((await fetch(`${url}/api/demo/buy`, { method: "POST" })).status).toBe(404);
+    expect(ledger.calls).toEqual([]);
   });
   it("serves static content, rejects symlink escape, catches malformed paths and request input", async () => {
     const { url, root, web } = await app(); writeFileSync(join(root, "private.txt"), "secret"); symlinkSync(join(root, "private.txt"), join(web, "leak.txt"));
-    expect(await (await fetch(url)).text()).toBe("ledger"); expect((await fetch(`${url}/leak.txt`)).status).toBe(403);
+    expect(await (await fetch(`${url}/ledger`)).text()).toBe("ledger"); expect((await fetch(`${url}/leak.txt`)).status).toBe(403);
     expect((await fetch(`${url}/%ZZ`)).status).toBe(400);
     expect((await fetch(`${url}/api/game/step`, { method: "POST", headers: { "content-type": "application/json" }, body: "not-json" })).status).toBe(400);
     expect((await fetch(`${url}/api/passes/invalid..testnet`)).status).toBe(400);

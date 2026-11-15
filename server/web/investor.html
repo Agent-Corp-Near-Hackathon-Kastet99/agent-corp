@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en"><head><script>if(window.opener&&window.opener!==window&&/[?&#](account_id|public_key|transactionHashes|signature|errorCode)=/.test(location.search+location.hash))window.close()</script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Foundry Stack · Investor Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&family=Archivo:wght@800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/landing.css"></head>
+<body>
+<header><div class="wrap"><a class="logo" href="/">Foundry<b>/</b>Stack</a></div></header>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<main class="dash"><div class="wrap">
+  <div class="investor-hero"><div><h1>Your AI contribution, at work.</h1>
+  <div class="status" id="status" role="status">Loading…</div></div>
+  <div class="panel" id="ai-panel">
+    <p id="wallet-line">Connect your NEAR testnet wallet to contribute.</p>
+    <div class="dl"><button class="btn sm" id="wallet-btn">Connect NEAR Wallet</button><button class="btn sm" id="connect-ai" hidden>Activate contribution</button><button class="btn ghost sm" id="wallet-off" hidden>Disconnect wallet</button></div>
+    </div></div>
+
+  <div class="dash-tabs" role="tablist" aria-label="Investor dashboard sections">
+    <button class="dash-tab" id="tab-overview" role="tab" aria-selected="true" aria-controls="tab-panel-overview" data-tab="overview">Overview</button>
+    <button class="dash-tab" id="tab-ledger" role="tab" aria-selected="false" aria-controls="tab-panel-ledger" data-tab="ledger">Ledger</button>
+    <button class="dash-tab" id="tab-allocation" role="tab" aria-selected="false" aria-controls="tab-panel-allocation" data-tab="allocation">Allocation</button>
+    <button class="dash-tab" id="tab-operations" role="tab" aria-selected="false" aria-controls="tab-panel-operations" data-tab="operations">Operations</button>
+    <button class="dash-tab" id="tab-governance" role="tab" aria-selected="false" aria-controls="tab-panel-governance" data-tab="governance">Governance</button>
+  </div>
+
+  <section class="tab-panel" id="tab-panel-overview" role="tabpanel" aria-labelledby="tab-overview" data-panel="overview">
+  <div class="metrics" id="metrics" aria-label="Metrics"></div>
+  <div class="near-block"><p class="near-close">One chain running the whole company, not just one feature.</p><div class="near-grid"><div class="near-track"><div class="near-item"><h3>Payments</h3><p>Players buy a pass or an item in NEAR, straight into company revenue.</p></div><div class="near-item"><h3>Ledger</h3><p>Every contribution, sale, expense and payout is a transaction, checkable by anyone.</p></div><div class="near-item"><h3>Accounting</h3><p>The contract tracks revenue, expenses, reserve and net, and splits it by contribution units.</p></div><div class="near-item"><h3>Identity</h3><p>Workers prove they're the wallet they claim with a signed NEP-413 message, no password.</p></div><div class="near-item"><h3>Governance</h3><p>Contributors vote on budgets with their units as weight.</p></div><div class="near-item"><h3>Payouts</h3><p>Contributors withdraw their share straight from the contract, no finance team in between.</p></div><div class="near-item"><h3>Cross-chain</h3><p>NEAR Intents let a payer swap in from another chain and still land as NEAR revenue.</p></div><div class="near-item" aria-hidden="true"><h3>Payments</h3><p>Players buy a pass or an item in NEAR, straight into company revenue.</p></div><div class="near-item" aria-hidden="true"><h3>Ledger</h3><p>Every contribution, sale, expense and payout is a transaction, checkable by anyone.</p></div><div class="near-item" aria-hidden="true"><h3>Accounting</h3><p>The contract tracks revenue, expenses, reserve and net, and splits it by contribution units.</p></div><div class="near-item" aria-hidden="true"><h3>Identity</h3><p>Workers prove they're the wallet they claim with a signed NEP-413 message, no password.</p></div><div class="near-item" aria-hidden="true"><h3>Governance</h3><p>Contributors vote on budgets with their units as weight.</p></div><div class="near-item" aria-hidden="true"><h3>Payouts</h3><p>Contributors withdraw their share straight from the contract, no finance team in between.</p></div><div class="near-item" aria-hidden="true"><h3>Cross-chain</h3><p>NEAR Intents let a payer swap in from another chain and still land as NEAR revenue.</p></div></div></div></div>
+  </section>
+
+  <section class="tab-panel" id="tab-panel-allocation" role="tabpanel" aria-labelledby="tab-allocation" data-panel="allocation" hidden>
+  <div class="two">
+    <div class="panel"><p class="cap">Investor distribution</p><div id="investors"></div></div>
+    <div><div class="panel"><p class="cap">AI resource distribution</p><div id="resources"></div></div>
+    <div class="panel"><p class="cap">Revenue &amp; withdrawal</p><div id="revenue"></div></div></div>
+  </div>
+  </section>
+
+  <section class="tab-panel" id="tab-panel-operations" role="tabpanel" aria-labelledby="tab-operations" data-panel="operations" hidden>
+  <div class="panel"><p class="cap">Agent Kanban Board</p><div class="lanes" id="board"></div></div>
+
+  <div class="panel"><p class="cap">Recent activity</p><ul class="log" id="activity"></ul></div>
+  </section>
+
+  <section class="tab-panel" id="tab-panel-governance" role="tabpanel" aria-labelledby="tab-governance" data-panel="governance" hidden>
+  <div class="panel"><div class="proposal-section-head"><div><p class="cap">Active proposals</p></div><button class="btn sm" id="create-proposal" type="button">Create proposal</button></div><div id="proposals"></div></div>
+  </section>
+
+  <section class="tab-panel embed-panel" id="tab-panel-ledger" role="tabpanel" aria-labelledby="tab-ledger" data-panel="ledger" hidden>
+    <iframe class="dash-frame" src="/ledger?embed=1" title="Ledger dashboard"></iframe>
+  </section>
+</div></main>
+
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true"><div class="sheet"><button class="x" id="m-close" aria-label="Close">×</button><div id="m-body"></div></div></div>
+<script type="module" src="/investor.js"></script>
+</body></html>

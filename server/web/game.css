@@ -94,3 +94,5 @@ kbd{display:inline-block;min-width:26px;padding:3px 7px;margin:0 2px;border-radi
 .btns{display:flex;gap:14px;justify-content:center;align-items:center}
 .btns .big{font-size:20px;padding:10px 24px}.btns .ghost{color:#2a2018}
 @media (max-height:520px){.card{padding:14px 18px}.card h1{font-size:40px}.brief{margin-bottom:8px;gap:4px}.brief li{font-size:13px}.big{padding:8px 22px;font-size:20px}.ring{width:min(92vh,92vw)}.medal{padding:4px 10px}.medal i{width:28px;height:28px}.medal b{font-size:15px}.score b{font-size:28px}}
+
+.grenade{margin-top:14px;text-align:center}.grenade .big{font-size:18px;padding:8px 22px}.grenade .big:disabled{opacity:.6;cursor:default}.gstatus{margin:8px 0 0;font:800 13px var(--ui);color:#fff;text-shadow:0 1px 4px #000;min-height:1em}.gstatus a{color:#7fe3ff}

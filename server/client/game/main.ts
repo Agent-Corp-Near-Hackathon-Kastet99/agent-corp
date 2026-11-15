@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { HouseLevel } from "../../src/levels.js";
-import { createState, step, summarize, DT, HEAR_RANGE, RUN_SPEED, WALK_SPEED, SPRINT_MAX, ticksToMs } from "../../web/sneak-core.js";
+import { createState, revive, step, summarize, DT, HEAR_RANGE, RUN_SPEED, WALK_SPEED, SPRINT_MAX, ticksToMs } from "../../web/sneak-core.js";
 import { Guard, Player, RouteDots, opaqueRects } from "./actors.js";
 import { CameraRig, Particles, Rings } from "./fx.js";
 import { Hud } from "./hud.js";
@@ -23,6 +23,8 @@ const QUIPS: Record<string, string[]> = {
 };
 
 class Game {
+  /** True once a Smoke Grenade is bought (verified payment): it resumes one capture per run. */
+  owned = false;
   readonly renderer: THREE.WebGLRenderer;
   readonly world: World;
   readonly rig: CameraRig;
@@ -84,7 +86,7 @@ class Game {
   }
 
   reset(start = true) {
-    this.state = createState(this.level);
+    this.state = createState(this.level, this.owned ? 1 : 0);
     this.log = []; this.lastKey = ""; this.acc = 0; this.botIdx = 0; this.botHeld = { mx: 0, my: 0, run: false }; this.hidden = 0; this.caughtAt = 0;
     this.snapshot();
     this.world.loot.forEach((_, i) => this.world.setLootTaken(i, false));
@@ -150,7 +152,11 @@ class Game {
       this.hud.flash("rgba(255,50,70,.55)");
       const who = (this.state.guards as Array<{ id: string; meter: number }>).reduce((a, b) => (b.meter > a.meter ? b : a));
       const quips = QUIPS[this.level.guards.find(g => g.id === who.id)!.skin]!;
-      setTimeout(() => this.hud.busted(quips[Math.floor(Math.random() * quips.length)]!, () => this.reset()), 850);
+      setTimeout(() => this.hud.busted(quips[Math.floor(Math.random() * quips.length)]!, () => this.reset(), {
+        owned: this.owned,
+        buy: async () => { const walletUrl = "/wallet.js"; const { buySmokeGrenade } = await import(/* @vite-ignore */ walletUrl); await buySmokeGrenade(); this.owned = true; this.state.smokes = 1; },
+        use: () => this.useSmoke(),
+      }), 850);
     } else if (e.type === "won") {
       this.phase = "won"; this.input.enabled = false;
       const x = this.level.exit.x, z = this.level.exit.y;
@@ -160,16 +166,29 @@ class Game {
     }
   }
 
+  /** Smoke Grenade after a capture: resume on the spot, unseen for a few seconds. The use is logged so the server replays it. */
+  private useSmoke() {
+    if (this.phase !== "caught") return;
+    this.owned = false;
+    this.state.smokes = 1;
+    if (!revive(this.state)) return;
+    this.log.push([this.state.tick, 0, 0, 0, 1] as unknown as Log[number]); this.lastKey = "";
+    this.phase = "play"; this.input.enabled = true; this.rig.setPunch(0);
+    const p = this.state.player;
+    this.fx.smoke(p.x, 0.5, p.y, 40);
+    this.hud.flash("rgba(200,210,230,.5)");
+    this.hud.toast("Smoke Grenade! Unseen for 3 seconds. Move!", 3000);
+    this.rig.kick(0.5);
+  }
+
   private async finish() {
     const result = summarize(this.level, this.state);
-    const view = { won: true, ms: result.ms, targetMs: this.level.targetMs, lootPct: result.lootPct, loot: result.loot, lootTotal: result.lootTotal, score: result.score, medals: result.medals, verified: null as boolean | null, best: this.best };
+    const view = { won: true, ms: result.ms, targetMs: this.level.targetMs, lootPct: result.lootPct, loot: result.loot, lootTotal: result.lootTotal, score: result.score, medals: result.medals, best: this.best };
     setTimeout(() => {
       this.hud.results(view, () => this.reset());
-      api("/api/game/run", { log: this.log }).then((r: { result: { ms: number; score: number }; best?: { ms: number } }) => {
-        const ok = r.result.ms === result.ms;
+      api("/api/game/run", { log: this.log }).then((r: { best?: { ms: number } }) => {
         this.best = r.best?.ms ?? this.best;
-        this.hud.setVerified(ok, r.best?.ms);
-      }).catch(() => this.hud.setVerified(false, this.best));
+      }).catch(() => {});
     }, 900);
   }
 
@@ -193,7 +212,7 @@ class Game {
     const speed = p.moving ? (p.run ? RUN_SPEED : WALK_SPEED) : 0;
     this.player.root.position.set(px, 0, py);
     this.player.animate(dt, this.phase === "caught" ? 0 : speed, Math.atan2(p.fx, p.fy), this.time);
-    this.hidden += ((s.hidden ? 1 : 0) - this.hidden) * Math.min(1, dt * 10);
+    this.hidden += ((s.hidden || s.smoke > 0 ? 1 : 0) - this.hidden) * Math.min(1, dt * 10);
     this.player.setHidden(this.hidden);
     this.player.showStars(this.phase === "caught", this.time);
     if (this.phase === "caught") { const t = Math.min(1, (this.time - this.caughtAt) * 4); this.player.body.scale.set(1 + 0.15 * t, 1 - 0.25 * t, 1 + 0.15 * t); this.rig.setPunch(Math.max(0, 1 - (this.time - this.caughtAt) / 2.2)); }
@@ -262,9 +281,7 @@ async function boot() {
   const hud = new Hud(document.getElementById("hud")!);
   const canvas = document.getElementById("scene") as HTMLCanvasElement;
   try {
-    let account: unknown;
-    try { account = await api("/api/player/me"); } catch (e) { if ((e as { status?: number }).status !== 401) throw e; }
-    await api(account ? "/api/player/session" : "/api/demo/session", {});
+    await api("/api/demo/session", {});
     const data = (await api("/api/game/levels/founder-house")) as { level: HouseLevel; best?: { ms: number } };
     const game = new Game(data.level, data.best?.ms, hud, canvas);
     hud.intro(data.best?.ms, () => game.start());

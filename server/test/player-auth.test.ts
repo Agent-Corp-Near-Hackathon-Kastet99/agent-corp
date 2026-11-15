@@ -38,7 +38,7 @@ it("rejects forged signatures, unauthorized keys and function-call keys", async 
 });
 const roots: string[] = [], servers: Server[] = [];
 afterEach(async () => { await Promise.all(servers.splice(0).map(s => new Promise<void>(r => s.close(() => r())))); roots.splice(0).forEach(r => rmSync(r,{recursive:true,force:true})); });
-it("serves personal checkout without server signing and gates per-account sessions on final entitlement", async () => {
+it("creates personal sessions without a purchase", async () => {
   const root = mkdtempSync(join(tmpdir(),"player-http-")); roots.push(root);
   const ledger = new TestLedger();
   const server = createApplication({ledger,store:new Store(join(root,'state.json')),gameOnly:true,gameOrigin:'https://game.example',playerRpc:{viewAccessKey:async()=>({permission:'FullAccess'})}});
@@ -54,12 +54,8 @@ it("serves personal checkout without server signing and gates per-account sessio
     return verified.headers.getSetCookie().find(c=>c.startsWith('heist-player='))!.split(';')[0]!;
   };
   const alice = await login('alice.testnet'), bob = await login('bob.testnet');
-  const checkout = await (await post('/api/player/checkout',{},alice)).json();
-  expect(checkout.signerId).toBe('alice.testnet');expect(checkout.receiverId).toBe(ledger.contractId);expect(checkout.actions[0].params.deposit).toBe(ledger.config.constraints.pass_price);
-  expect((await post('/api/player/session',{},alice)).status).toBe(402);
-  ledger.passes.add('alice.testnet');
-  expect((await post('/api/player/checkout',{},alice)).status).toBe(409);
-  expect((await post('/api/player/session',{},bob)).status).toBe(402);
+  expect((await post('/api/player/checkout',{},alice)).status).toBe(404);
+  expect((await post('/api/player/session',{},bob)).status).toBe(200);
   const session = await post('/api/player/session',{},alice);expect(session.status).toBe(200);
   const gameCookie = session.headers.getSetCookie()[0]!.split(';')[0]!;
   expect(session.headers.getSetCookie()[0]).toContain('Secure');

@@ -3,7 +3,7 @@
 //! Money flow (see docs/AGENT-CORP.md):
 //! - Contributors donate metered AI usage. The accounting oracle records it as lifetime
 //!   contribution units (`record_contribution`). Units never trigger a payout on their own.
-//! - Customers buy the product (`buy_pass`). The payment is revenue of the open period.
+//! - Customers buy products (`buy_pass`, `buy_smoke_grenade`). The payment is revenue of the open period.
 //! - The CEO agent approves operating costs (`record_expense`); the oracle pays them
 //!   (`pay_expense`). Costs are paid from period revenue first, then from the expense reserve.
 //! - At period end the oracle calls `close_distribution`. Net profit
@@ -641,6 +641,35 @@ impl Contract {
             self.push_refund(buyer, excess);
         }
         pass
+    }
+
+    /// Customer buys one Smoke Grenade for the RAM HEIST game. This is a product sale, not a
+    /// pass purchase: it records revenue and a receipt but does not change pass entitlement.
+    #[payable]
+    pub fn buy_smoke_grenade(&mut self) -> Sale {
+        self.assert_live();
+        let deposit = env::attached_deposit().as_yoctonear();
+        let price = self.constraints.pass_price.0;
+        require!(deposit == price, "Smoke Grenade price must be exact");
+        let sale = Sale {
+            id: self.sales.len(),
+            account_id: env::predecessor_account_id(),
+            product: "smoke-grenade".to_string(),
+            amount: U128(price),
+            period: self.current_period,
+            paid_at: U64(env::block_timestamp()),
+        };
+        self.periods
+            .get_mut(&self.current_period)
+            .unwrap()
+            .revenue
+            .0 += price;
+        emit(
+            "buy_smoke_grenade",
+            near_sdk::serde_json::to_value(&sale).unwrap(),
+        );
+        self.sales.push(sale.clone());
+        sale
     }
 
     // ---------------------------------------------------------------- expenses (CEO + oracle)
