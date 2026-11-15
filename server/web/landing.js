@@ -8,7 +8,6 @@ async function refresh() {
   $('#wallet-status').textContent = account ? `Connected: ${account}` : 'No wallet connected.';
   const hw = $('#hdr-wallet'); hw.textContent = account ? (account.length > 18 ? account.slice(0, 8) + '…' + account.slice(-8) : account) : 'Connect Wallet'; hw.title = account ? 'Click to disconnect' : '';
   $('#flow li[data-s]').classList.toggle('on', !!account);
-  $('#dl-mac').hidden = !s.downloads.macos; $('#dl-mac-off').hidden = s.downloads.macos;
 }
 const open = () => { modal.hidden = false; refresh(); };
 $('#invest').onclick = open; $('#invest-hero').onclick = open;

@@ -376,3 +376,5 @@ h1 .pill{color:var(--action);border-color:var(--action)}
 .builder-info li::before{content:"— ";color:var(--action)}
 .builder-links{margin-top:28px;display:flex;flex-wrap:wrap;gap:12px}
 @media(max-width:720px){#built-by .builder{grid-template-columns:1fr;gap:28px}#built-by .builder-photo{max-width:320px}}
+
+.flow .fb .dl{flex-wrap:nowrap;gap:10px}.flow .fb .dl .btn{white-space:nowrap;padding-left:14px;padding-right:14px}@media(max-width:760px){.flow .fb .dl{flex-wrap:wrap}}

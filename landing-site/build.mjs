@@ -12,6 +12,8 @@ const web = join(root, 'server', 'web');
 await rm(out, { recursive: true, force: true });
 await mkdir(join(out, 'shared'), { recursive: true });
 for (const file of ['game.html', 'game3d.js', 'game.css', 'style.css', 'chain.js', 'wallet.js', 'wallet-callback.html', 'wallet.css', 'investor.html', 'investor.js', 'landing.css', 'landing.js', 'hackathon.js', 'foundry-stack-agents-v12.mp4', 'kostiantyn-ostapenko.jpg']) await cp(join(web, file), join(out, file));
+await mkdir(join(out, 'download'), { recursive: true });
+await cp(join(root, 'artifacts', 'Agent-Corp-macOS-arm64.zip'), join(out, 'download', 'agent-corp-macos-arm64.zip'));
 await cp(join(web, 'landing.html'), join(out, 'index.html'));
 await cp(join(root, 'shared', 'src', 'money.js'), join(out, 'shared', 'money.js'));
 const chain = join(out, 'chain.js');

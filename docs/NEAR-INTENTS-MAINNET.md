@@ -1,0 +1,9 @@
+# NEAR Intents mainnet adapter
+
+`server/src/intents-mainnet.ts` is a disconnected server-side 1Click client. No route, UI, environment variable, wallet, or checkout creates it. The existing testnet store retains its separate dry market preview.
+
+The client requires `createMainnetIntentsClient({ enabled: true, jwt })` at the call site; `jwt` is optional and must remain server-side. It supports token discovery, dry or executable exact-input/exact-output quotes, status lookup including deposit memo, and optional deposit transaction notification. Amounts are integer strings in token base units. The caller supplies the recipient, refund address, deadline, assets, and slippage. An executable quote returns deposit instructions; the client does not sign or send a transfer. Do not automatically retry quote creation or deposit submission after an ambiguous network failure.
+
+Before connecting checkout, design and test persistent quote/order tracking and recovery, wallet deposit signing for each supported origin chain, memo handling, expiry, refunds, and verified settlement. A 1Click success is a swap, not proof that the testnet pass was purchased. The current contract accepts native NEAR for the pass; receiving wNEAR does not call `buy_pass` or grant entitlement. Mainnet contract deployment, native NEAR conversion/payment and entitlement reconciliation require separate implementation and end-to-end verification. No live swaps have been tested.
+
+API references: [1Click quickstart](https://docs.near-intents.org/integration/distribution-channels/1click-api/quickstart/making-a-request), [quote](https://docs.near-intents.org/api-reference/oneclick/request-a-swap-quote), [status](https://docs.near-intents.org/api-reference/oneclick/check-swap-execution-status), [deposit notification](https://docs.near-intents.org/api-reference/oneclick/submit-deposit-transaction-hash).

@@ -26,6 +26,7 @@ Amounts/units are decimal strings (`U128`); durations/timestamps are decimal str
 | `record_contribution(account_id, units, reference)` | oracle | 1–5,000,000 units/report; max 100 contributors; reference ≤200 bytes. No payout. |
 | `record_contribution_once(account_id, units, reference)` | oracle | Returns bool. Identical retry is false/no-op; conflicting account or amount for same reference rejected. |
 | `buy_pass()` | player, payable | Returns Pass; exact price is revenue; excess returned separately. Repeat buys add revenue. No purchase refunds. |
+| `buy_smoke_grenade()` | player, payable | Exact-price game item sale; records period revenue and a `smoke-grenade` sales receipt without activating a pass. |
 | `record_expense(category, amount, payee, reference)` | CEO | Returns numeric ID. Positive amount; nonempty reference ≤200 bytes. Categories: hosting/domain/api/payment_fee/contractor/other. Both Board and owner caps apply. |
 | `pay_expense(expense_id)` | oracle | Approved → Paying → Paid or Approved after failure; cost reversed on failure. |
 | `close_distribution(period_id)` | oracle | Returns PeriodReceipt; ended period or demo mode only; pending expense transfers and duplicate close rejected. |
@@ -46,7 +47,7 @@ Paged views `get_sales`, `get_expenses`, `get_periods`, `get_contributors` accep
 ## Events and callbacks
 
 Format: `EVENT_JSON:{"standard":"agentcorp","version":"2.0.0","event":"…","data":[…]}`.
-Names: set_constraints, set_paused, set_oracle, set_ceo, record_contribution, buy_pass, record_expense, pay_expense, expense_paid, expense_payment_failed, close_distribution, withdraw_distribution, payout_failed, withdraw_refund, refund_paid, refund_failed, create_proposal, vote, finalize. Payloads serialize ledger records/receipts or identify affected account/expense, amount and period. Initiation does not prove transfer success.
+Names: set_constraints, set_paused, set_oracle, set_ceo, record_contribution, buy_pass, buy_smoke_grenade, record_expense, pay_expense, expense_paid, expense_payment_failed, close_distribution, withdraw_distribution, payout_failed, withdraw_refund, refund_paid, refund_failed, create_proposal, vote, finalize. Payloads serialize ledger records/receipts or identify affected account/expense, amount and period. Initiation does not prove transfer success.
 
 Private callbacks (self only): `on_expense_paid(expense_id, amount, period_id) -> bool`, `on_payout(account_id, amount) -> bool`, `on_refund(account_id, amount) -> bool`. Expense callback checks stored Paying state, amount and period. Withdrawals restore distribution liability; excess returns restore refund liability.
 
