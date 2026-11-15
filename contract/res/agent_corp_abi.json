@@ -7,7 +7,7 @@
       "compiler": "rustc 1.95.0",
       "builder": "cargo-near cargo-near-build 0.11.5"
     },
-    "wasm_hash": "9pP5x3w5PkNo3aRAQ4JdgQMZ5JQiXwHPYmBNjWjKf3We"
+    "wasm_hash": "DK1ZFVMpz1FK7YWPwCKCsq2Y8fJKyNMsGPLaQEAVMkvZ"
   },
   "body": {
     "functions": [
@@ -22,6 +22,20 @@
           "serialization_type": "json",
           "type_schema": {
             "$ref": "#/definitions/Pass"
+          }
+        }
+      },
+      {
+        "name": "buy_smoke_grenade",
+        "doc": " Customer buys one Smoke Grenade for the RAM HEIST game. This is a product sale, not a\n pass purchase: it records revenue and a receipt but does not change pass entitlement.",
+        "kind": "call",
+        "modifiers": [
+          "payable"
+        ],
+        "result": {
+          "serialization_type": "json",
+          "type_schema": {
+            "$ref": "#/definitions/Sale"
           }
         }
       },

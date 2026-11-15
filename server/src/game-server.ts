@@ -11,7 +11,7 @@ const ledger = createGameLedger({ contractId: required("GAME_CONTRACT_ID"), cust
 const stateFile = required("AGENTCORP_STATE");
 const store = new Store(stateFile);
 const hackathon = createHackathon(required("GAME_CONTRACT_ID"), join(dirname(stateFile), "hackathon.json"), undefined, store.log)?.demo;
-const server = createApplication({ store, hackathon, ledger, demoActions: true, gameOnly: true, gameOrigin: origin.origin });
+const server = createApplication({ store, hackathon, ledger, demoActions: true, gameOnly: true, gameOrigin: origin.origin, extraOrigins: (process.env.EXTRA_ORIGINS ?? "").split(",").map(o => o.trim()).filter(o => /^https:\/\/[a-z0-9.-]+$/i.test(o)) });
 const port = Number(process.env.PORT ?? 8787);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid PORT");
 server.listen(port, process.env.HOST ?? "127.0.0.1", () => console.log("Game backend listening"));

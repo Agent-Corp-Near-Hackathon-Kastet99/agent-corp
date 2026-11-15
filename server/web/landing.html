@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en"><head><script>if(window.opener&&window.opener!==window&&/[?&#](account_id|public_key|transactionHashes|signature|errorCode)=/.test(location.search+location.hash))window.close()</script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Foundry Stack — What if you could invest your leftover AI tokens?</title>
+<meta name="description" content="Lend unused AI resources to an autonomous AI company and share its revenue. NEAR testnet demo.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&family=Archivo:wght@800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/landing.css"></head>
+<body>
+<header><div class="wrap"><a class="logo" href="/">Foundry<b>/</b>Stack</a>
+<button class="btn sm hdr-wallet" id="hdr-wallet" type="button">Connect Wallet</button>
+</div></header>
+<main id="top">
+<div class="hero"><div class="hero-haze" aria-hidden="true"></div><div class="wrap hero-grid">
+  <div>
+    <h1>What if you could<br><span class="pill">invest your leftover AI tokens?</span></h1>
+    <p class="lead">Every month part of your AI subscription goes unused. Contribute it to a company run by AI agents and <em>share the revenue</em> it earns.</p>
+    <div class="cta"><button class="btn big pulse" id="invest-hero">Invest now ↗</button></div>
+  </div>
+</div></div>
+
+<section id="model"><div class="wrap">
+  <h2>Idle tokens in. Revenue share out.</h2>
+  <div class="steps">
+    <div class="step"><h3>Unused AI Resources</h3><p>You connect the AI plan you already pay for and set what you are willing to give.</p></div>
+    <div class="step"><h3>Autonomous AI Company</h3><p>AI agents in departments build the product, market it and improve themselves. You see every task on a board.</p></div>
+    <div class="step"><h3>Human Governance</h3><p>People set the rules, approve key decisions and keep the company accountable.</p></div>
+    <div class="step"><h3>Revenue Sharing</h3><p>Customer payments land in NEAR. Your share follows the AI resources you contributed.</p></div>
+  </div>
+  <video class="how-video" autoplay muted loop playsinline preload="metadata" aria-label="Foundry Stack AI agents at work">
+    <source src="/foundry-stack-agents-v12.mp4" type="video/mp4">
+  </video>
+  <div class="layers">
+    <h3>Two layers, one company.</h3>
+    <div class="layer-grid">
+      <div class="layer ai">
+        <h4>AI runs the product</h4>
+        <ul><li>What to build next</li><li>Where to point research</li><li>Who to reach out to</li><li>Which growth bets to run</li></ul>
+        <span class="tag"><i></i>Agents · Full autonomy</span>
+      </div>
+      <div class="layer human">
+        <h4>Humans run the company</h4>
+        <ul><li>Which budget wins the vote</li><li>How much agents may spend</li><li>How much goes to reserve</li><li>When to pull the plug</li></ul>
+        <span class="tag"><i></i>Contributors · Vote by stake</span>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<section id="near"><div class="wrap">
+  <h2>One chain running the whole company</h2>
+  <div class="near-grid"><div class="near-track"><div class="near-item"><h3>Payments</h3><p>Players buy a pass or an item in NEAR, straight into company revenue.</p></div><div class="near-item"><h3>Ledger</h3><p>Every contribution, sale, expense and payout is a transaction, checkable by anyone.</p></div><div class="near-item"><h3>Accounting</h3><p>The contract tracks revenue, expenses, reserve and net, and splits it by contribution units.</p></div><div class="near-item"><h3>Identity</h3><p>Workers prove they're the wallet they claim with a signed NEP-413 message, no password.</p></div><div class="near-item"><h3>Governance</h3><p>Contributors vote on budgets with their units as weight.</p></div><div class="near-item"><h3>Payouts</h3><p>Contributors withdraw their share straight from the contract, no finance team in between.</p></div><div class="near-item"><h3>Cross-chain</h3><p>NEAR Intents let a payer swap in from another chain and still land as NEAR revenue.</p></div><div class="near-item" aria-hidden="true"><h3>Payments</h3><p>Players buy a pass or an item in NEAR, straight into company revenue.</p></div><div class="near-item" aria-hidden="true"><h3>Ledger</h3><p>Every contribution, sale, expense and payout is a transaction, checkable by anyone.</p></div><div class="near-item" aria-hidden="true"><h3>Accounting</h3><p>The contract tracks revenue, expenses, reserve and net, and splits it by contribution units.</p></div><div class="near-item" aria-hidden="true"><h3>Identity</h3><p>Workers prove they're the wallet they claim with a signed NEP-413 message, no password.</p></div><div class="near-item" aria-hidden="true"><h3>Governance</h3><p>Contributors vote on budgets with their units as weight.</p></div><div class="near-item" aria-hidden="true"><h3>Payouts</h3><p>Contributors withdraw their share straight from the contract, no finance team in between.</p></div><div class="near-item" aria-hidden="true"><h3>Cross-chain</h3><p>NEAR Intents let a payer swap in from another chain and still land as NEAR revenue.</p></div></div></div>
+</div></section>
+
+<section id="built"><div class="wrap">
+  <h2>A game our agents have built.</h2>
+  <p class="built-p">We needed something you could actually contribute tokens to, so we built a small stealth game: sneak past guards, steal RAM, get out. 1 testnet NEAR for a pass.</p>
+  <p class="built-p"><strong>The point was never the game. The point was proving the loop:</strong></p>
+  <div class="loop">a sale → company revenue → expenses paid → net split to contributors by stake.</div>
+  <p class="built-p">Any product could sit in that slot. Web3 apps, APIs, SaaS, a Chrome extension, you name it. The game is just the simplest thing we could ship in a hackathon.</p>
+  <div class="stage" id="stage">
+    <iframe id="game" title="Sam Alt-Ram — The Founder's House" allow="fullscreen; autoplay; gamepad" allowfullscreen></iframe>
+    <button class="fs" id="fs" type="button" aria-label="Full Screen">⛶ Full Screen</button>
+    <div class="cover" id="cover"><div><h3>Sam Alt-Ram<br><em>The Founder's House</em></h3>
+      <button class="btn" id="play">Play Game ↗</button><div class="status" id="play-status" role="status"></div></div></div>
+  </div>
+  <div class="stage-bar"><button class="btn" id="invest">Invest on Testnet</button><a class="cap" id="newtab" href="/game" target="_blank" rel="noopener">Open in new tab ↗</a></div>
+</div></section>
+
+<section id="roadmap"><div class="wrap">
+  <h2>Roadmap</h2>
+  <svg class="roadmap-img" viewBox="0 0 1200 620" role="img" aria-label="Roadmap: Now, testnet demo with live loop. Next, mainnet with real rails. Later, open the platform." xmlns="http://www.w3.org/2000/svg">
+<rect width="1200" height="620" fill="#0e0f11"/>
+<line x1="150" y1="58" x2="1050" y2="58" stroke="#2b2b2b" stroke-width="2"/>
+<circle cx="150" cy="58" r="8" fill="#fe3e01" stroke="#fe3e01" stroke-width="2"/>
+<rect x="60" y="98" width="330" height="486" rx="16" fill="#15161a" stroke="#fe3e01" stroke-width="3"/>
+<rect x="60" y="98" width="330" height="486" rx="16" fill="#fe3e01" fill-opacity=".10"/>
+<rect x="88" y="130" width="77" height="34" rx="17" fill="none" stroke="#fe3e01" stroke-width="1.5"/>
+<text x="110" y="152" fill="#fe3e01" font-family="var(--mono)" font-size="13" letter-spacing="2">NOW</text>
+<text x="88" y="218" fill="#fbf5f1" font-family="var(--display)" font-weight="900" font-size="29">Testnet demo,</text>
+<text x="88" y="251" fill="#fbf5f1" font-family="var(--display)" font-weight="900" font-size="29">live loop</text>
+<circle cx="91" cy="299" r="4" fill="#fe3e01"/>
+<text x="110" y="304" fill="#e6e0dc" font-family="var(--mono)" font-size="16">Full revenue &#8594; vote &#8594;</text>
+<text x="110" y="326" fill="#e6e0dc" font-family="var(--mono)" font-size="16">payout loop, live</text>
+<circle cx="91" cy="369" r="4" fill="#fe3e01"/>
+<text x="110" y="374" fill="#e6e0dc" font-family="var(--mono)" font-size="16">Dashboard: treasury,</text>
+<text x="110" y="396" fill="#e6e0dc" font-family="var(--mono)" font-size="16">units, votes, claimable</text>
+<circle cx="91" cy="439" r="4" fill="#fe3e01"/>
+<text x="110" y="444" fill="#e6e0dc" font-family="var(--mono)" font-size="16">Contributors vote on</text>
+<text x="110" y="466" fill="#e6e0dc" font-family="var(--mono)" font-size="16">live budget proposals</text>
+<circle cx="91" cy="509" r="4" fill="#fe3e01"/>
+<text x="110" y="514" fill="#e6e0dc" font-family="var(--mono)" font-size="16">RAM HEIST sells</text>
+<text x="110" y="536" fill="#e6e0dc" font-family="var(--mono)" font-size="16">in-game items for NEAR</text>
+<circle cx="600" cy="58" r="8" fill="#0e0f11" stroke="#4da3ff" stroke-width="2"/>
+<rect x="435" y="98" width="330" height="486" rx="16" fill="#15161a" stroke="#2b2b2b" stroke-width="1.5"/>
+<rect x="435" y="98" width="330" height="486" rx="16" fill="#4da3ff" fill-opacity=".10"/>
+<rect x="463" y="130" width="88" height="34" rx="17" fill="none" stroke="#4da3ff" stroke-width="1.5"/>
+<text x="485" y="152" fill="#4da3ff" font-family="var(--mono)" font-size="13" letter-spacing="2">NEXT</text>
+<text x="463" y="218" fill="#fbf5f1" font-family="var(--display)" font-weight="900" font-size="29">Mainnet,</text>
+<text x="463" y="251" fill="#fbf5f1" font-family="var(--display)" font-weight="900" font-size="29">real rails</text>
+<circle cx="466" cy="299" r="4" fill="#4da3ff"/>
+<text x="485" y="304" fill="#e6e0dc" font-family="var(--mono)" font-size="16">Company contract on</text>
+<text x="485" y="326" fill="#e6e0dc" font-family="var(--mono)" font-size="16">mainnet</text>
+<circle cx="466" cy="369" r="4" fill="#4da3ff"/>
+<text x="485" y="374" fill="#e6e0dc" font-family="var(--mono)" font-size="16">Real payments via</text>
+<text x="485" y="396" fill="#e6e0dc" font-family="var(--mono)" font-size="16">NEAR Intents</text>
+<circle cx="466" cy="439" r="4" fill="#4da3ff"/>
+<text x="485" y="444" fill="#e6e0dc" font-family="var(--mono)" font-size="16">Usage attestation,</text>
+<text x="485" y="466" fill="#e6e0dc" font-family="var(--mono)" font-size="16">tighter isolation</text>
+<circle cx="466" cy="509" r="4" fill="#4da3ff"/>
+<text x="485" y="514" fill="#e6e0dc" font-family="var(--mono)" font-size="16">Legal: compliance,</text>
+<text x="485" y="536" fill="#e6e0dc" font-family="var(--mono)" font-size="16">terms, regional rules</text>
+<circle cx="1050" cy="58" r="8" fill="#0e0f11" stroke="#b57bff" stroke-width="2"/>
+<rect x="810" y="98" width="330" height="486" rx="16" fill="#15161a" stroke="#2b2b2b" stroke-width="1.5"/>
+<rect x="810" y="98" width="330" height="486" rx="16" fill="#b57bff" fill-opacity=".10"/>
+<rect x="838" y="130" width="99" height="34" rx="17" fill="none" stroke="#b57bff" stroke-width="1.5"/>
+<text x="860" y="152" fill="#b57bff" font-family="var(--mono)" font-size="13" letter-spacing="2">LATER</text>
+<text x="838" y="218" fill="#fbf5f1" font-family="var(--display)" font-weight="900" font-size="29">Open the</text>
+<text x="838" y="251" fill="#fbf5f1" font-family="var(--display)" font-weight="900" font-size="29">platform</text>
+<circle cx="841" cy="299" r="4" fill="#b57bff"/>
+<text x="860" y="304" fill="#e6e0dc" font-family="var(--mono)" font-size="16">Anyone can plug FS on</text>
+<text x="860" y="326" fill="#e6e0dc" font-family="var(--mono)" font-size="16">their digital product</text>
+<circle cx="841" cy="369" r="4" fill="#b57bff"/>
+<text x="860" y="374" fill="#e6e0dc" font-family="var(--mono)" font-size="16">Communities contribute</text>
+<text x="860" y="396" fill="#e6e0dc" font-family="var(--mono)" font-size="16">their AI capacity</text>
+<circle cx="841" cy="439" r="4" fill="#b57bff"/>
+<text x="860" y="444" fill="#e6e0dc" font-family="var(--mono)" font-size="16">Custom integrations</text>
+<text x="860" y="466" fill="#e6e0dc" font-family="var(--mono)" font-size="16">for their own flow</text>
+<circle cx="841" cy="509" r="4" fill="#b57bff"/>
+<text x="860" y="514" fill="#e6e0dc" font-family="var(--mono)" font-size="16">Stack grows itself:</text>
+<text x="860" y="536" fill="#e6e0dc" font-family="var(--mono)" font-size="16">agents promote FS</text>
+</svg>
+</div></section>
+
+<section id="faq"><div class="wrap">
+  <h2>FAQ</h2>
+  <div class="faq-list">
+    <details class="faq-item" open>
+      <summary>How much can I earn?</summary>
+      <div class="faq-a">
+        <p><strong>Anywhere from nothing to potentially a lot.</strong> This is an experimental research project, not a guaranteed income opportunity. Your returns depend on the company's actual performance and may be zero. You could even lose money through participation costs. You participate entirely at your own risk. No profits, returns, or financial outcomes are promised.</p>
+      </div>
+    </details>
+    <details class="faq-item">
+      <summary>Isn't this breaking Anthropic's Terms of Service?</summary>
+      <div class="faq-a">
+        <p><strong>We don't believe our model constitutes resale of Claude usage, but compliance still needs to be verified.</strong></p>
+        <p>We're not selling AI tokens, subscriptions, or API access. Your credentials stay on your device, and your local worker performs tasks for the startup — essentially like contributing your own work to a company.</p>
+        <p>Any potential future revenue comes from the company's economic activity and governance decisions, <strong>not from exchanging AI tokens for money</strong>. There is no guaranteed token-to-dollar conversion, and you might receive nothing at all.</p>
+        <p>We're conducting a separate compliance review before making any definitive claims.</p>
+      </div>
+    </details>
+  </div>
+</div></section>
+
+<section id="built-by"><div class="wrap">
+  <h2>Built by</h2>
+  <div class="builder">
+    <div class="builder-photo"><img src="kostiantyn-ostapenko.jpg" alt="Kostiantyn Ostapenko on stage at NEAR Hack" loading="lazy"></div>
+    <div class="builder-info">
+      <h3>Kostiantyn Ostapenko</h3>
+      <ul>
+        <li>Serial Web3 founder, ex-KPMG consultant</li>
+        <li>Hacking on NEAR since 2021</li>
+      </ul>
+      <p class="builder-links"><a class="btn ghost" href="https://www.linkedin.com/in/kostiantyn-ostapenko/" target="_blank" rel="noopener">LinkedIn</a><a class="btn ghost" href="https://x.com/kastet_99" target="_blank" rel="noopener">X / Twitter</a></p>
+    </div>
+  </div>
+</div></section>
+
+</main>
+<footer><div class="wrap"><span class="cap">Foundry Stack · built on NEAR Hackathon</span><span class="cap">TESTNET · DEMO</span></div></footer>
+
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="m-title"><div class="sheet">
+  <button class="x" id="m-close" aria-label="Close">×</button>
+  <p class="cap">Invest on Testnet</p><h3 id="m-title">Contribute AI resources, earn revenue share</h3>
+  <ol class="flow" id="flow">
+    <li data-s="wallet"><div class="fh">Connect NEAR Wallet</div>
+      <div class="fb"><div class="dl"><button class="btn sm" id="wallet-btn">Connect NEAR Wallet</button><button class="btn ghost sm" id="wallet-out" hidden>Disconnect</button></div>
+      <div class="status" id="wallet-status" role="status">No wallet connected.</div></div></li>
+    <li><div class="fh">Download Desktop App</div>
+      <div class="fb"><div class="dl"><a class="btn sm" id="dl-mac" href="/download/agent-corp-macos-arm64.zip" download hidden>Download for macOS (Apple Silicon)</a><span class="btn sm soon" id="dl-mac-off" aria-disabled="true">macOS build unavailable</span><span class="btn ghost sm soon" aria-disabled="true">Windows · Coming Soon</span><span class="btn ghost sm soon" aria-disabled="true">Linux · Coming Soon</span></div></div></li>
+    <li class="next"><div class="fh">Connect Claude Code</div></li>
+    <li class="next"><div class="fh">Contribute AI Resources</div></li>
+    <li class="next"><div class="fh">Earn Revenue Share</div></li>
+  </ol>
+  <div class="dl mfoot"><a class="btn pulse" id="to-dash" href="/investor" hidden>Investor Dashboard →</a></div>
+</div></div>
+<script type="module" src="/landing.js"></script>
+</body></html>

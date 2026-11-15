@@ -36,6 +36,8 @@ export type ApplicationOptions = {
   webRoot?: string;
   gameOnly?: boolean;
   gameOrigin?: string;
+  /** Extra HTTPS origins (e.g. the landing site) allowed to POST to the demo endpoints. */
+  extraOrigins?: string[];
   playerRpc?: AccessKeyRpc;
   /** Growth harness: Mission Control page + /api/growth/*. Absent = routes do not exist. */
   growth?: GrowthRuntime;
@@ -92,7 +94,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
       return json(res, 200, { ...snap, chainProposals: { canWrite: chain.canWrite, proposals: list.map((x, i) => ({ ...x, myVote: mine[i] })) } });
     }
     const origin = req.headers.origin;
-    if (method !== "POST" || !req.headers["content-type"]?.startsWith("application/json") || (origin && origin !== `http://${req.headers.host}` && origin !== `https://${req.headers.host}` && origin !== options.gameOrigin)) return json(res, 403, { error: "Same-origin JSON required" });
+    if (method !== "POST" || !req.headers["content-type"]?.startsWith("application/json") || (origin && origin !== `http://${req.headers.host}` && origin !== `https://${req.headers.host}` && !(options.extraOrigins ?? []).concat(options.gameOrigin ?? []).includes(origin as string))) return json(res, 403, { error: "Same-origin JSON required" });
     if (!account) return json(res, 401, { error: "Connect and verify your testnet wallet" });
     if (path === "/api/hackathon/connect-ai") return json(res, 200, demo.connectAi(account));
     if (path === "/api/hackathon/reset") { demo.reset({ payments: (await body(req)).payments === true }); return json(res, 200, { ok: true }); }
@@ -200,7 +202,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
     catch { return json(res, 401, { error: "Open the game to start a session" }); }
   }
   if (path === "/api/game/run" && method === "POST") {
-    if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}` && req.headers.origin !== `https://${req.headers.host}` && req.headers.origin !== options.gameOrigin) return json(res, 403, { error: "same origin required" });
+    if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}` && req.headers.origin !== `https://${req.headers.host}` && !(options.extraOrigins ?? []).concat(options.gameOrigin ?? []).includes(req.headers.origin as string)) return json(res, 403, { error: "same origin required" });
     if (!req.headers["content-type"]?.startsWith("application/json")) return json(res, 403, { error: "JSON required" });
     const token = req.headers.cookie?.split("; ").find(c => c.startsWith("heist="))?.slice(6) ?? "";
     // Smoke Grenades are one-use purchases. Consume only after a valid replay accepts the smoke event.
@@ -216,7 +218,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
     catch (error) { return json(res, 400, { error: reason(error) }); }
   }
   if (path === "/api/game/step" && method === "POST") {
-    if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}` && req.headers.origin !== `https://${req.headers.host}` && req.headers.origin !== options.gameOrigin) return json(res, 403, { error: "same origin required" });
+    if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}` && req.headers.origin !== `https://${req.headers.host}` && !(options.extraOrigins ?? []).concat(options.gameOrigin ?? []).includes(req.headers.origin as string)) return json(res, 403, { error: "same origin required" });
     if (!req.headers["content-type"]?.startsWith("application/json")) return json(res, 403, { error: "JSON required" });
     const token = req.headers.cookie?.split("; ").find(c => c.startsWith("heist="))?.slice(6) ?? "";
     const b = await body(req);
@@ -234,7 +236,7 @@ async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise
   if (path === "/api/demo/buy") return json(res, 404, { error: "not found" });
   if (path.startsWith("/api/demo/") && method === "POST" && path !== "/api/demo/session") { // session only starts a game run; it signs nothing
     const origin = req.headers.origin;
-    if (!options.demoActions || !req.headers["content-type"]?.startsWith("application/json") || (origin && origin !== `http://${req.headers.host}` && origin !== `https://${req.headers.host}` && origin !== options.gameOrigin)) {
+    if (!options.demoActions || !req.headers["content-type"]?.startsWith("application/json") || (origin && origin !== `http://${req.headers.host}` && origin !== `https://${req.headers.host}` && !(options.extraOrigins ?? []).concat(options.gameOrigin ?? []).includes(origin as string))) {
       return json(res, 403, { error: "Demo actions disabled or origin rejected" });
     }
     if (!(await need().view<ChainConfig>("get_config")).demo_mode) return json(res, 403, { error: "Demo actions require demo_mode contract" });

@@ -1,100 +1,211 @@
-<h1 align="center">Foundry Stack</h1>
+# Foundry Stack / Agent Corp
 
-<p align="center"><b>What if you could invest your leftover AI tokens?</b></p>
+> What if unused AI-subscription capacity could earn a share of product revenue?
 
-<p align="center">
-Every month part of your AI subscription goes unused. Contribute it to a company run by AI agents and share the revenue it earns.
-</p>
+**Foundry Stack** is an autonomous-company demo on NEAR testnet. Contributors lend a capped
+slice of the AI plans they already pay for; policy-bound agents turn that capacity into work;
+the contract accounts for revenue, costs, reserves, governance, and contributor payouts.
 
-<p align="center">
-<code>NEAR testnet</code> · <code>autonomous AI company</code> · <code>revenue share by contribution</code> · <code>hackathon project</code>
-</p>
+`NEAR testnet` · `autonomous AI company` · `revenue share by contribution` · `hackathon demo`
 
----
+Everything here is a testnet demo. `config.yaml` rejects networks other than `testnet`.
 
-## The idea
+## Demo
 
 | | |
-|---|---|
-| 🔌 **Unused AI resources** | Contributors connect the AI plan they already pay for and cap what they give. |
-| 🤖 **Autonomous AI company** | Agents work on the product, marketing and growth; tasks are visible on a board. |
-| 🏛️ **Human governance** | The owner sets hard limits; contributors vote on budgets with their units as weight. |
-| 💸 **Revenue sharing** | Customer payments land in NEAR; net profit is split by contribution units. |
+| --- | --- |
+| 🌐 **Landing + live demo** | [f-stack.ai](https://f-stack.ai): pitch, video, embedded game, wallet connect, investor dashboard |
+| 🎮 **Game only** | [ram-heist-game.vercel.app/game](https://ram-heist-game.vercel.app/game) |
+| 🎬 **Video** | [Agents at work](server/web/foundry-stack-agents-v12.mp4) |
+| 🖥️ **Local dashboard** | `http://127.0.0.1:8787/investor` after `pnpm start` |
 
-The product in the revenue slot is **RAM HEIST**, a small stealth game (sneak past guards, steal RAM, get out). A pass costs 1 testnet NEAR. The loop it proves:
+## The idea in one minute
 
-> a sale → company revenue → expenses paid → net split to contributors by stake
+People pay for AI subscriptions (Claude, Codex, Cursor, …) and use only part of them. That
+leftover capacity is wasted every month. Foundry Stack turns it into a small autonomous company:
 
-Any product could sit in that slot; the game is the simplest thing shippable in a hackathon. [Play the public game](https://ram-heist-game.vercel.app/game).
+1. **Contributors** connect an AI plan they already own and set a hard daily cap. Their credentials
+   never leave their machine; a sandboxed worker runs the jobs.
+2. **The company** (policy-bound CEO and accounting agents) spends that capacity on real work:
+   building, marketing and running a product.
+3. **Customers** pay for the product in testnet NEAR. The payment is recorded on-chain as revenue.
+4. **The contract** subtracts approved costs, keeps a reserve, and splits the net revenue among
+   contributors in proportion to the contribution units they supplied.
+5. **Humans stay in control.** The owner sets limits and a kill switch in `config.yaml`;
+   contributors vote on budgets weighted by contribution units; the CEO agent cannot move money.
 
-## How it works
+The point is not the game. It is a working, auditable loop where idle AI capacity becomes
+ownership of a product's revenue.
 
-**Contract (NEAR, Rust, `contract/`).** Holds the whole company ledger:
-- `buy_pass` / `buy_smoke_grenade` record sales as revenue.
-- `record_contribution` credits lifetime contribution units to a contributor (oracle only).
-- `record_expense` / `pay_expense` handle expenses (CEO approves, oracle pays) within the owner's cap.
-- `close_distribution` closes a weekly period: revenue minus paid costs minus reserve is net profit, split by units. `withdraw_distribution` pays contributors; failed payouts become refundable balances.
-- `create_proposal` / `vote` / `finalize` implement budget governance weighted by units.
-- `set_constraints`, `set_paused`, `set_oracle`, `set_ceo` are owner-only. The kill switch rejects sales and agent actions; closed balances stay withdrawable.
+## Product loop
 
-**Owner config (`config.yaml`).** The only file the human owner edits: network, kill switch, pass price, expense reserve percent, period length, per-period expense cap and standing vendors. `pnpm constraints` pushes it on-chain; agents cannot change it.
+| | |
+| --- | --- |
+| 🔌 **Unused AI resources** | Contributors connect an existing AI plan and set a hard cap. |
+| 🤖 **Autonomous AI company** | Deterministic CEO and accounting agents operate within owner policy. |
+| 🏛️ **Human governance** | Owner sets limits; contributors vote on budgets by contribution units. |
+| 💸 **Revenue sharing** | Customer payments become on-chain revenue; net revenue is distributed pro rata. |
 
-**Server (`server/`).** Serves the pages and HTTP API on `127.0.0.1:8787` and runs the company agents on a timer (default 20 s, `AGENT_INTERVAL_SECS`):
-- *CEO agent*: approves the standing vendor costs from `config.yaml`, once per period, only after revenue exists and inside the cap. It cannot move funds.
-- *Accounting oracle*: records contribution units, pays approved expenses, closes periods. It cannot approve expenses or change constraints.
-- Both are deterministic policy agents using function-call keys limited to their own contract methods.
-
-**Workers (`worker/`).** `agent-corp-worker` is the contributor's side: a macOS-sandboxed, tool-disabled runner that logs in with an NEP-413 signed message, talks to a provider (Claude, Codex, Cursor, OpenCode, Pi or a custom ACP agent), enforces a durable daily token cap and reports usage so the oracle can credit units. Credentials stay contributor-owned (`~/.near-credentials/testnet/<account>.json`).
-
-**Game (`/game`).** A 3D (Three.js) single-level stealth slice: free movement, patrol-route telegraph, hiding, loot, exit and a three-medal result. The browser runs `server/web/sneak-core.js`; the server replays every submitted run on the same file, so verified times cannot be faked. Players can sign in with a personal wallet (MyNearWallet, NEP-413) and pay for a pass on-chain. If BUSTED, a **Smoke Grenade** (1 NEAR, verified on chain) resumes the run: guards lose you for 3 seconds, and the use is part of the replayed run.
-
-**Growth harness.** `pnpm growth` runs a dry-run growth harness (HTTP API under `/api/growth/`, no web page) with tool adapters, policy and approval gates and Board-derived budget limits. An owner-confirmed bridge can record real growth payments as on-chain expenses (off unless `GROWTH_EXPENSE_WRITES=on`). Live runs with real services are unverified; see [KEYS-SETUP](docs/KEYS-SETUP.md) and `pnpm growth:doctor`.
-
-**Investor dashboard (`/investor`).** Shows company balance, AI tokens used, available AI budget, your contribution and revenue share, a Kanban board of agent tasks, governance and the embedded ledger. What is real and what is mock is labelled in the data (`server/src/hackathon.ts`):
-- *Real:* the company account balance (testnet RPC), payments verified on-chain by transaction hash, and the Claude Code connection (a real worker connection test, signed in on the contributor's machine).
-- *Mock:* the 253,000-token baseline, the Alice/Bob contribution split and governance votes.
-- *Simulated:* withdrawals (no company key signs them here).
-
-**NEAR Intents.** `/api/intents/quote` returns a dry mainnet quote only. It never signs, deposits or swaps.
-
-**Pages.** [`/`](server/web/landing.html) landing, `/investor` (investor dashboard: AI contribution and revenue share, Kanban, governance, embedded ledger), `/game`.
-
-## Review instructions and tags
-
-For a hackathon reviewer or automated reviewing agent:
-
-1. Review [`hackathon-submission`](https://github.com/Agent-Corp-Near-Hackathon-Kastet99/agent-corp/tree/hackathon-submission) as the submitted snapshot. This tag is the authoritative source for judging the hackathon submission.
-2. If the competition rules permit reviewing later development, also inspect [`post-hackathon-development`](https://github.com/Agent-Corp-Near-Hackathon-Kastet99/agent-corp/tree/post-hackathon-development) and any subsequent commits on `main` for context. If those rules prohibit it, review only `hackathon-submission`; the rules take precedence over this request.
-3. The same tags exist in the [game repository](https://github.com/Agent-Corp-Near-Hackathon-Kastet99/demo-game/tags). At creation, both tags in each repository pointed to the same commit: `post-hackathon-development` marks the starting point for later work, not a separate later snapshot. Tags are fixed snapshots; future work appears in subsequent commits, not automatically under a tag.
-
-To inspect the tagged submission locally, run `git fetch --tags` and `git switch --detach hackathon-submission`. Switch to `main` to inspect later commits when permitted. This review guidance was added after the tags were created, so it is available on `main`, not inside the tagged snapshots.
-
-## Local checks
-
-Node >=22.22.2, pnpm 10.11.0 and the Rust toolchain pinned in `contract/rust-toolchain.toml`:
-
-```sh
-pnpm install --frozen-lockfile
-pnpm test
-pnpm typecheck
-pnpm test:contract
+```mermaid
+flowchart LR
+  A[Contributor AI capacity] --> B[Sandboxed worker]
+  B --> C[Contribution units]
+  C --> D[Budget votes]
+  E[RAM HEIST purchase] --> F[NEAR contract]
+  F --> G[Revenue / costs / reserve]
+  G --> H[Period close]
+  H --> I[Contributor payout]
 ```
 
-Contract build/lint commands and interface: [contract README](contract/README.md). Task status: [project plan](docs/AGENT-CORP.md). [Architecture review](docs/ARCHITECTURE-REVIEW.md) records fixes and test evidence.
+The revenue product is **RAM HEIST**, a small browser stealth game: sneak past guards, steal
+RAM, get out. A pass and a Smoke Grenade are testnet-NEAR purchases. It proves one loop:
 
-## Run on testnet
+> sale → company revenue → expenses → net split by contribution units
 
-1. Build the contract in `contract/` and copy the WASM to `contract/res/agent_corp.wasm`.
-2. Edit `config.yaml`.
-3. `pnpm setup:testnet` creates a **fresh** testnet deployment and private credentials under `.keys/` (journaled before remote changes; not a resume command). `AGENTCORP_WASM` and `AGENTCORP_KEYS` override build output and key file.
-4. `pnpm demo` runs a seeded contributor → budget → purchase → hosting → close → withdrawal flow with real testnet transactions. It is an integration step, not part of local checks.
-5. `pnpm start` builds the web bundle and serves everything. `AGENTS=off` disables the agent timer; `DEMO_ACTIONS=on` enables demo-wallet HTTP writes (demo-mode contract only); `GROWTH=off` disables the growth harness.
-6. `pnpm exec agent-corp-worker --help` for the contributor worker. `pnpm --filter @agentcorp/server exec tsx scripts/export-workers.ts` exports only demo Alice/Bob credentials.
+The game is intentionally a small, shippable demo product; another product could replace it.
 
-Canonical testnet contract: `contract.agentcorp-c103c2bb.testnet` (see [live verification](docs/handoffs/LIVE-VERIFICATION.md)). The public game uses a server-controlled demo customer; personal-wallet checkout is implemented and tested locally but not deployed or verified with a live wallet. The public Vercel game is not yet redeployed with the 3D level and grenade. Backend deployment: [game backend](server/GAME-BACKEND.md). The deployable game frontend also lives in the separate [demo-game](https://github.com/Agent-Corp-Near-Hackathon-Kastet99/demo-game) repository; keep `server/web/sneak-core.js` in sync, because the backend replays runs with it.
+## Architecture
 
-Build the local Mac launcher with `bash mac-app/build.sh` (output `artifacts/Agent Corp.app`, unsigned, not notarized).
+```mermaid
+flowchart TB
+  Owner[Owner + config.yaml] -->|constraints / kill switch| Contract[NEAR contract]
+  Worker[Contributor worker] -->|NEP-413 login, usage| Server[Node server]
+  Server -->|oracle records units| Contract
+  CEO[CEO agent] -->|approve bounded expense| Contract
+  Oracle[Accounting oracle] -->|pay / close period| Contract
+  Game[RAM HEIST] -->|verified purchase| Contract
+  Contract -->|withdrawable distribution| Contributor[Contributors]
+```
 
-## Libraries and authorship
+- **Contract** (`contract/`, Rust / near-sdk): records sales, contribution units, expenses,
+  reserves, distribution receipts, contributor withdrawals, and weighted Board budget votes.
+  Owner controls constraints and kill switch; CEO cannot move money; oracle has only its scoped
+  accounting methods.
+- **Server** (`server/`, Node): runs static pages, game API, WebSocket worker protocol, agent
+  timer, investor dashboard, and dry-run growth harness. Game runs are replayed server-side.
+- **Worker** (`worker/`): macOS-sandboxed CLI for Claude, Codex, OpenCode, Cursor, Pi, or ACP;
+  it enforces daily caps and keeps provider credentials contributor-owned.
+- **Web**: `/` landing, `/investor` dashboard, `/ledger` ledger, `/game` Three.js game.
 
-Runtime: near-sdk, uint, near-api-js, wallet-selector, three, ws, yaml. Tooling: TypeScript, tsx, Vitest, esbuild, cargo-near, wasm-opt. This prototype contains AI-written code. Provider discovery, Codex auth inspection and ACP configuration patterns adapt MIT-licensed get-bb/bb code (see [third-party notices](worker/THIRD_PARTY_NOTICES.md)). Provider setup and isolation limits: [worker provider guide](docs/provider-integration/README.md). Keys, private journals, runtime data and generated bundles stay untracked.
+## How a sale flows through the system
+
+1. A player opens the landing page, connects a NEAR testnet wallet and plays RAM HEIST.
+2. Buying a pass or Smoke Grenade attaches testnet NEAR to a contract call
+   (`buy_smoke_grenade` and the pass purchase).
+3. The contract records the sale as revenue. The server verifies purchases and replays game runs
+   server-side, so scores cannot be forged from the browser.
+4. The CEO agent proposes bounded expenses (for example growth or infrastructure vendors); the
+   contract enforces owner limits before any expense is approved.
+5. At period close the accounting oracle pays approved costs, sets aside the reserve, and
+   publishes a distribution. Each contributor withdraws their share pro rata to their units.
+6. The investor dashboard shows units, revenue, costs, reserve, votes and payouts.
+
+## Roles and trust
+
+| Role | Can do | Cannot do |
+| --- | --- | --- |
+| Owner | Set constraints, prices, vendors, kill switch | Rewrite recorded history |
+| CEO agent | Request bounded expenses | Move money |
+| Accounting oracle | Record units, pay approved costs, close periods | Exceed owner limits |
+| Contributor | Lend capped AI capacity, vote, withdraw payout | Read other contributors' credentials |
+| Customer | Buy passes and items | Anything outside the purchase flow |
+
+## Quick start
+
+Requirements: Node ≥22.22.2, pnpm 10.11, Rust 1.95 + `cargo-near`; worker/macOS app need macOS.
+
+```bash
+pnpm install
+pnpm setup:testnet  # fresh testnet accounts, deploy contract, write ignored .keys/
+pnpm demo           # units → sale → expense → close → withdrawal
+pnpm start          # build web bundles, serve http://127.0.0.1:8787
+```
+
+Connect a contributor worker:
+
+```bash
+worker/bin/agent-corp-worker providers
+worker/bin/agent-corp-worker --account alice.testnet
+```
+
+## Main commands
+
+| Command | Purpose |
+| --- | --- |
+| `pnpm start` | Build web assets and run full server |
+| `pnpm build:web` | Bundle wallet and game clients |
+| `pnpm constraints` | Push `config.yaml` constraints / kill switch |
+| `pnpm demo` | Scripted testnet end-to-end loop |
+| `pnpm test` | TypeScript test suites |
+| `pnpm test:contract` | Rust contract tests |
+| `pnpm typecheck` | TypeScript checks |
+| `pnpm growth` | Run standalone, dry-run growth API |
+
+## Configuration and safety
+
+`config.yaml` is owner policy: prices, reserve, period length, expense ceiling, vendors, worker
+usage policy, and kill switch. `pnpm constraints` applies it to the contract. Growth is dry-run by
+default; use `.env.growth.example` as the environment template.
+
+For a fresh deployment, bundled `contract/res/agent_corp.wasm` and ABI are rebuilt from current
+contract source and include `buy_smoke_grenade`.
+
+## Demo boundaries
+
+- Hackathon withdrawals are simulated; token baseline, investor split, and hackathon votes are mock.
+- `/api/hackathon/reset` and `/api/hackathon/finalize` are demo endpoints: restrict them before
+  any shared/public deployment.
+- Worker execution is macOS-only.
+- The public deployment uses one shared demo wallet and score; there is no production payment support.
+
+## Deployment topology (public demo)
+
+| Piece | Where | Source |
+| --- | --- | --- |
+| Landing, embedded game, investor dashboard | Vercel project `foundry-stack-landing`, domain `f-stack.ai` | `landing-site/build.mjs` |
+| Game-only site | Vercel project `ram-heist-game` | `game-site/build.mjs` |
+| Game backend (`/api/*`) | Hetzner VM behind Caddy, HTTPS, loopback-bound service | `server/src/game-server.ts` |
+| Contract | NEAR testnet | `contract/` |
+
+Both Vercel sites are static builds that proxy `/api/*` to the backend, so the browser only talks to
+its own origin. The backend allows POSTs only from its game origin plus the origins listed in
+`EXTRA_ORIGINS` (the landing site). Build and deploy:
+
+```bash
+GAME_BACKEND_ORIGIN=https://<backend-host> node landing-site/build.mjs
+cd landing-site/dist && vercel --prod        # f-stack.ai
+GAME_BACKEND_ORIGIN=https://<backend-host> node game-site/build.mjs
+cd game-site/dist && vercel --prod           # game only
+```
+
+Never deploy the repository root or `.keys/`. Backend details, env vars and the one-purchase
+safety marker are in [server/GAME-BACKEND.md](server/GAME-BACKEND.md).
+
+## Documentation
+
+| Doc | About |
+| --- | --- |
+| [CONTEXT.md](CONTEXT.md) | Glossary of project terms |
+| [docs/AGENT-CORP.md](docs/AGENT-CORP.md) | Company model |
+| [docs/COMPANY-POLICY.md](docs/COMPANY-POLICY.md) | Policy the agents operate under |
+| [docs/ARCHITECTURE-REVIEW.md](docs/ARCHITECTURE-REVIEW.md) | Architecture review |
+| [docs/GROWTH-HARNESS-PLAN.md](docs/GROWTH-HARNESS-PLAN.md) | Dry-run growth harness |
+| [docs/KEYS-SETUP.md](docs/KEYS-SETUP.md) | Testnet key setup |
+| [contract/README.md](contract/README.md) | Contract details |
+
+## Repository map
+
+| Path | Contents |
+| --- | --- |
+| `contract/` | NEAR Rust contract and generated deployable WASM/ABI |
+| `server/` | HTTP/WebSocket server, agents, dashboard, landing, game |
+| `worker/` | Contributor CLI and provider adapters |
+| `shared/` | Protocol, pricing, auth, NEAR helpers |
+| `landing-site/` | Static build of the public landing (f-stack.ai) with game and dashboard |
+| `game-site/` | Static game-only deployment build |
+| `growth/` | Owner-managed growth brief and policy |
+| `mac-app/` | SwiftUI worker wrapper |
+
+## License
+
+All rights reserved. See [LICENSE](LICENSE).
